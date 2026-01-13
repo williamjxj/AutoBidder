@@ -1,0 +1,422 @@
+openapi: 3.0.3
+info:
+  title: Offline Sync API
+  description: API for syncing offline queue and resolving conflicts
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development
+  - url: https://api.auto-bidder.com/api
+    description: Production
+
+tags:
+  - name: sync
+    description: Offline synchronization operations
+
+paths:
+  /sync/batch:
+    post:
+      tags:
+        - sync
+      summary: Sync batch of offline changes
+      description: Processes multiple queued changes from offline mode
+      operationId: syncBatch
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - changes
+              properties:
+                changes:
+                  type: array
+                  description: Array of offline changes to sync
+                  maxItems: 100
+                  items:
+                    $ref: '#/components/schemas/OfflineChange'
+              example:
+                changes:
+                  - id: "offline-1"
+                    operation: "update"
+                    entity_type: "proposal"
+                    entity_id: "proj-123"
+                    data:
+                      title: "Updated title"
+                      description: "Updated description"
+                    timestamp: "2026-01-12T10:00:00Z"
+                    version: 3
+                  - id: "offline-2"
+                    operation: "create"
+                    entity_type: "keyword"
+                    data:
+                      keyword: "react developer"
+                      description: "Frontend specialist"
+                    timestamp: "2026-01-12T10:05:00Z"
+      responses:
+        '200':
+          description: Batch sync processed (may include conflicts/failures)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncBatchResponse'
+              example:
+                synced:
+                  - id: "offline-1"
+                    status: "success"
+                  - id: "offline-2"
+                    status: "success"
+                conflicts:
+                  - id: "offline-1"
+                    entity_type: "proposal"
+                    entity_id: "proj-123"
+                    conflict_type: "version_mismatch"
+                    client_version: 3
+                    server_version: 5
+                    server_data:
+                      title: "Different title from another session"
+                failed:
+                  - id: "offline-3"
+                    error: "Validation error"
+                    detail: "Required field 'title' is missing"
+                summary:
+                  total: 3
+                  synced: 2
+                  conflicts: 1
+                  failed: 0
+        '400':
+          description: Invalid request (empty changes, too many items)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /sync/conflicts:
+    get:
+      tags:
+        - sync
+      summary: Get pending conflicts
+      description: Returns all unresolved conflicts for the user
+      operationId: getPendingConflicts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Conflicts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conflict'
+                  count:
+                    type: integer
+              example:
+                conflicts:
+                  - id: "conflict-1"
+                    entity_type: "proposal"
+                    entity_id: "proj-123"
+                    conflict_type: "version_mismatch"
+                    client_data:
+                      title: "My local changes"
+                    server_data:
+                      title: "Changes from another tab"
+                    client_version: 3
+                    server_version: 5
+                    created_at: "2026-01-12T10:30:00Z"
+                count: 1
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /sync/resolve:
+    post:
+      tags:
+        - sync
+      summary: Resolve conflict
+      description: Resolves a conflict by choosing to overwrite or discard client changes
+      operationId: resolveConflict
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictResolution'
+            examples:
+              overwrite:
+                summary: Keep client changes (overwrite server)
+                value:
+                  conflict_id: "conflict-1"
+                  action: "overwrite"
+                  resolved_data:
+                    title: "My local changes"
+                    description: "Updated description"
+              discard:
+                summary: Discard client changes (keep server)
+                value:
+                  conflict_id: "conflict-1"
+                  action: "discard"
+      responses:
+        '200':
+          description: Conflict resolved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [resolved]
+                  action:
+                    type: string
+                    enum: [overwrite, discard]
+                  entity_type:
+                    type: string
+                  entity_id:
+                    type: string
+                  new_version:
+                    type: integer
+                    nullable: true
+                    description: New version after overwrite (null if discarded)
+              example:
+                status: "resolved"
+                action: "overwrite"
+                entity_type: "proposal"
+                entity_id: "proj-123"
+                new_version: 6
+        '404':
+          description: Conflict not found (already resolved or expired)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid resolution action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase user JWT token
+
+  schemas:
+    OfflineChange:
+      type: object
+      required:
+        - id
+        - operation
+        - entity_type
+        - data
+        - timestamp
+      properties:
+        id:
+          type: string
+          description: Client-generated unique ID for this change
+          example: "offline-1"
+        operation:
+          type: string
+          enum: [create, update, delete]
+          description: Type of operation
+        entity_type:
+          type: string
+          enum: [proposal, project, keyword, knowledge_document, strategy]
+          description: Entity type being modified
+        entity_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Entity ID (null for create operations)
+        data:
+          type: object
+          description: Data to create/update (omitted for delete)
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: When change was made (client timestamp)
+        version:
+          type: integer
+          nullable: true
+          description: Expected version for update operations (conflict detection)
+
+    SyncBatchResponse:
+      type: object
+      required:
+        - synced
+        - conflicts
+        - failed
+        - summary
+      properties:
+        synced:
+          type: array
+          description: Successfully synced changes
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Offline change ID
+              status:
+                type: string
+                enum: [success]
+              entity_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: Entity ID (for create operations, returns new ID)
+        conflicts:
+          type: array
+          description: Changes with conflicts requiring resolution
+          items:
+            $ref: '#/components/schemas/Conflict'
+        failed:
+          type: array
+          description: Changes that failed (validation errors, etc.)
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              error:
+                type: string
+              detail:
+                type: string
+        summary:
+          type: object
+          required:
+            - total
+            - synced
+            - conflicts
+            - failed
+          properties:
+            total:
+              type: integer
+              description: Total changes in batch
+            synced:
+              type: integer
+              description: Successfully synced count
+            conflicts:
+              type: integer
+              description: Conflicts requiring resolution
+            failed:
+              type: integer
+              description: Failed changes count
+
+    Conflict:
+      type: object
+      required:
+        - id
+        - entity_type
+        - entity_id
+        - conflict_type
+        - client_data
+        - server_data
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Conflict ID
+        entity_type:
+          type: string
+          enum: [proposal, project, keyword, knowledge_document, strategy]
+          description: Entity type with conflict
+        entity_id:
+          type: string
+          format: uuid
+          description: Entity ID
+        conflict_type:
+          type: string
+          enum: [version_mismatch, concurrent_edit]
+          description: Type of conflict
+        client_data:
+          type: object
+          description: Client's pending changes
+          additionalProperties: true
+        server_data:
+          type: object
+          description: Current server state
+          additionalProperties: true
+        client_version:
+          type: integer
+          nullable: true
+          description: Client's version
+        server_version:
+          type: integer
+          description: Server's current version
+        created_at:
+          type: string
+          format: date-time
+          description: When conflict was detected
+
+    ConflictResolution:
+      type: object
+      required:
+        - conflict_id
+        - action
+      properties:
+        conflict_id:
+          type: string
+          format: uuid
+          description: ID of conflict to resolve
+        action:
+          type: string
+          enum: [overwrite, discard]
+          description: |
+            - overwrite: Use client data, overwrite server (last-write-wins)
+            - discard: Discard client changes, keep server data
+        resolved_data:
+          type: object
+          description: Data to save (required if action=overwrite)
+          additionalProperties: true
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Unauthorized"
+            detail: "Valid JWT token required"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            detail: "An unexpected error occurred"

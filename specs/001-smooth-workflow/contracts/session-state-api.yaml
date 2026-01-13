@@ -1,0 +1,309 @@
+openapi: 3.0.3
+info:
+  title: Session State API
+  description: API for managing user workflow session state
+  version: 1.0.0
+  contact:
+    name: Auto-Bidder Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development
+  - url: https://api.auto-bidder.com/api
+    description: Production
+
+tags:
+  - name: session
+    description: Session state operations
+
+paths:
+  /session/state:
+    get:
+      tags:
+        - session
+      summary: Get current session state
+      description: Retrieves the current workflow state for the authenticated user
+      operationId: getSessionState
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session state retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionState'
+              examples:
+                projects_view:
+                  summary: User viewing projects with filters
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    user_id: "123e4567-e89b-12d3-a456-426614174000"
+                    active_feature: "projects"
+                    entity_id: null
+                    context_data:
+                      filters:
+                        status: "active"
+                        search: "design"
+                      sort: "updated_at_desc"
+                      scrollPosition: 450
+                    navigation_history:
+                      - path: "/dashboard"
+                        timestamp: "2026-01-12T10:00:00Z"
+                      - path: "/projects"
+                        timestamp: "2026-01-12T10:05:00Z"
+                    last_activity_at: "2026-01-12T10:30:45Z"
+                    created_at: "2026-01-11T09:00:00Z"
+                    updated_at: "2026-01-12T10:30:45Z"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: No session state found (first time user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Not found"
+                detail: "No session state exists for this user"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - session
+      summary: Update session state
+      description: Updates or creates workflow session state for the authenticated user
+      operationId: updateSessionState
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionStateUpdate'
+            examples:
+              navigate_to_proposals:
+                summary: User navigated to proposals page
+                value:
+                  active_feature: "proposals"
+                  context_data:
+                    filters:
+                      status: ["draft", "submitted"]
+                    activeTab: "drafts"
+              update_filters:
+                summary: User changed filters without navigation
+                value:
+                  context_data:
+                    filters:
+                      status: "active"
+                      priority: "high"
+      responses:
+        '200':
+          description: Session state updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionState'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '413':
+          description: Context data too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Payload too large"
+                detail: "context_data exceeds 50KB limit"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - session
+      summary: Clear session state
+      description: Deletes the session state for the authenticated user
+      operationId: deleteSessionState
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Session state cleared successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT token
+
+  schemas:
+    SessionState:
+      type: object
+      required:
+        - id
+        - user_id
+        - active_feature
+        - context_data
+        - navigation_history
+        - last_activity_at
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Session state ID
+        user_id:
+          type: string
+          format: uuid
+          description: User ID
+        active_feature:
+          type: string
+          enum:
+            - projects
+            - proposals
+            - keywords
+            - analytics
+            - knowledge-base
+            - settings
+            - strategies
+            - dashboard
+          description: Currently active feature/page
+        entity_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of currently viewed entity (project, proposal, etc.)
+        context_data:
+          type: object
+          description: Page-specific state (filters, selections, scroll position)
+          additionalProperties: true
+          example:
+            filters:
+              status: "active"
+            scrollPosition: 450
+        navigation_history:
+          type: array
+          description: Recent navigation history (max 10 entries)
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/NavigationEntry'
+        last_activity_at:
+          type: string
+          format: date-time
+          description: Last state update timestamp
+        created_at:
+          type: string
+          format: date-time
+          description: Session state creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    SessionStateUpdate:
+      type: object
+      properties:
+        active_feature:
+          type: string
+          enum:
+            - projects
+            - proposals
+            - keywords
+            - analytics
+            - knowledge-base
+            - settings
+            - strategies
+            - dashboard
+          description: Currently active feature/page
+        entity_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of currently viewed entity
+        context_data:
+          type: object
+          description: Page-specific state (partial update, merged with existing)
+          additionalProperties: true
+        navigation_entry:
+          $ref: '#/components/schemas/NavigationEntry'
+          description: New navigation entry to append to history
+
+    NavigationEntry:
+      type: object
+      required:
+        - path
+        - timestamp
+      properties:
+        path:
+          type: string
+          description: Navigation path
+          example: "/dashboard/projects"
+        timestamp:
+          type: string
+          format: date-time
+          description: Navigation timestamp
+        metadata:
+          type: object
+          description: Optional navigation metadata
+          additionalProperties: true
+          example:
+            method: "link"
+            duration_ms: 450
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error type
+        detail:
+          type: string
+          description: Detailed error message
+        field:
+          type: string
+          description: Field that caused validation error (if applicable)
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Unauthorized"
+            detail: "Valid JWT token required"
+
+    BadRequestError:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Validation error"
+            detail: "active_feature must be one of: projects, proposals, keywords, analytics, knowledge-base, settings, strategies, dashboard"
+            field: "active_feature"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            detail: "An unexpected error occurred"

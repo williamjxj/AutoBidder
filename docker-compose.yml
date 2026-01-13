@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (optional for local development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: auto-bidder-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auto_bidder_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - auto-bidder-network
+
+  # ChromaDB (vector database)
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: auto-bidder-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - auto-bidder-network
+
+  # Python FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auto-bidder-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - CHROMA_PERSIST_DIR=/app/chroma_db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auto_bidder_dev
+      - SESSION_STATE_TTL_HOURS=24
+      - DRAFT_RETENTION_HOURS=24
+      - MAX_DRAFT_SIZE_KB=1000
+      - ENABLE_WORKFLOW_ANALYTICS=true
+    volumes:
+      - ./backend:/app
+      - chromadb_data:/app/chroma_db
+    depends_on:
+      - postgres
+      - chromadb
+    networks:
+      - auto-bidder-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Next.js Frontend (optional - usually run with npm run dev)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: auto-bidder-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+  #     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+  #     - PYTHON_AI_SERVICE_URL=http://backend:8000
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - auto-bidder-network
+
+volumes:
+  postgres_data:
+  chromadb_data:
+
+networks:
+  auto-bidder-network:
+    driver: bridge

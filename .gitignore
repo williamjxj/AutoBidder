@@ -1,0 +1,39 @@
+# Operating System
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+*.code-workspace
+
+# Temporary Files
+*.tmp
+*.temp
+.cache/
+
+# Build Output (will be more specific in subdirectories)
+dist/
+build/
+out/
+*.tsbuildinfo
+
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB
+**/chroma_db/
+**/chromadb/
+
+
+# Misc
+.turbo/
+.vercel/
+.railway/

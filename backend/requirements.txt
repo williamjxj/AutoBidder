@@ -1,0 +1,45 @@
+# FastAPI and Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database and Storage
+supabase==2.9.1
+psycopg2-binary==2.9.9
+
+# Vector Database and RAG
+chromadb==0.4.22
+langchain==0.1.4
+langchain-community==0.0.16
+langchain-openai==0.0.5
+
+# AI/ML
+openai==1.10.0
+
+# Document Processing
+pypdf==3.17.4
+python-docx==1.1.0
+python-magic==0.4.27
+
+# Web Scraping (crawlee removed temporarily due to dependency conflicts)
+# crawlee will be added in Phase 3 when implementing scraping
+# For now, we'll use beautifulsoup4 + playwright directly
+playwright==1.41.1
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# Utilities
+python-dotenv==1.0.1
+httpx>=0.24.0,<0.28.0
+tenacity==8.2.3
+aiofiles==23.2.1
+
+# Development
+pytest==8.0.0
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+ruff==0.1.15
+black==24.1.1
+mypy==1.8.0
