@@ -177,7 +177,7 @@ class StrategyService:
                         "system_prompt": strategy_data.system_prompt,
                         "tone": strategy_data.tone,
                         "focus_areas": strategy_data.focus_areas,
-                        "temperature": float(strategy_data.temperature)),
+                        "temperature": float(strategy_data.temperature),
                         "max_tokens": strategy_data.max_tokens,
                         "is_default": strategy_data.is_default,
                     }
