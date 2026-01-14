@@ -13,7 +13,7 @@ interface RequestOptions extends RequestInit {
 class ApiClient {
   private baseUrl: string
 
-  constructor(baseUrl: string = '/api') {
+  constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl
   }
 
@@ -41,7 +41,45 @@ class ApiClient {
     try {
       const headers = await this.getAuthHeaders()
 
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const trimmedEndpoint = endpoint.trim()
+      if (!trimmedEndpoint) {
+        throw new Error('API endpoint cannot be empty')
+      }
+
+      // Determine the final URL
+      let finalUrl: string
+
+      if (/^(https?:)?\/\//i.test(trimmedEndpoint)) {
+        // It's an absolute URL, use it directly
+        finalUrl = trimmedEndpoint
+      } else {
+        // It's a relative URL, resolve against the backend
+        const backend = getBackendUrl()
+
+        // Ensure backend doesn't have trailing slash and path doesn't have leading slash
+        const cleanBackend = backend.replace(/\/+$/, '')
+        const cleanPath = trimmedEndpoint.replace(/^\/+/, '')
+
+        finalUrl = `${cleanBackend}/${cleanPath}`
+      }
+
+      // Final validation to prevent malformed URLs like /apihttp:/...
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+        // If it starts with /api but isn't absolute, it might have been incorrectly prefixed
+        if (finalUrl.startsWith('/api')) {
+          const backend = getBackendUrl()
+          finalUrl = `${backend.replace(/\/+$/, '')}/${finalUrl.replace(/^\/+/, '')}`
+        } else {
+          throw new Error(`Invalid API URL: ${finalUrl}. URL must be absolute.`)
+        }
+      }
+
+      // Log the request in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[ApiClient] ${options.method || 'GET'} ${finalUrl}`)
+      }
+
+      const response = await fetch(finalUrl, {
         ...options,
         headers: {
           ...headers,
@@ -50,7 +88,18 @@ class ApiClient {
         body: options.body ? JSON.stringify(options.body) : undefined,
       })
 
-      const data = await response.json()
+      // Handle non-JSON responses (e.g., 404 from Next.js)
+      let data: any
+      const contentType = response.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        // For non-JSON responses (like 404), create a simple error object
+        data = {
+          error: `Request failed with status ${response.status}`,
+          status: response.status,
+        }
+      }
 
       if (!response.ok) {
         // Create enhanced error object with response details
@@ -74,7 +123,7 @@ class ApiClient {
     } catch (error) {
       // Format network/unexpected errors
       const formattedError = errorFormatter.format(error)
-      
+
       return {
         data: null,
         error: formattedError.whatWentWrong,
@@ -126,27 +175,62 @@ import type {
 } from '@/types/workflow'
 
 /**
+ * Get backend API URL from environment
+ * Returns a properly formatted absolute URL
+ */
+function getBackendUrl(): string {
+  const url = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+
+  // Normalize: remove trailing slashes and trim
+  let cleanUrl = url.trim().replace(/\/+$/, '')
+
+  // Ensure protocol
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    cleanUrl = `http://${cleanUrl.replace(/^\/+/, '')}`
+  }
+
+  return cleanUrl
+}
+
+/**
+ * Construct an absolute API URL
+ * Ensures the URL is always properly formatted and absolute
+ */
+function buildApiUrl(path: string): string {
+  const backend = getBackendUrl()
+  const cleanPath = path.replace(/^\/+/, '')
+  return `${backend}/${cleanPath}`
+}
+
+/**
  * Session State API
  */
 export async function getSessionState(): Promise<SessionState | null> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
-  const { data } = await apiClient.get<SessionState>(`${backend}/api/session/state`)
+  // Only run on client-side
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const url = buildApiUrl('/api/session/state')
+  const { data } = await apiClient.get<SessionState>(url)
   return data
 }
 
 export async function updateSessionState(
   state: SessionStateUpdate
 ): Promise<SessionState | null> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
-  const { data } = await apiClient.put<SessionState>(
-    `${backend}/api/session/state`,
-    state
-  )
+  // Fix: Don't build URL if window is undefined (SSR)
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const url = buildApiUrl('/api/session/state')
+  const { data } = await apiClient.put<SessionState>(url, state)
   return data
 }
 
 export async function deleteSessionState(): Promise<void> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   await apiClient.delete(`${backend}/api/session/state`)
 }
 
@@ -154,7 +238,7 @@ export async function deleteSessionState(): Promise<void> {
  * Draft API
  */
 export async function listDrafts(): Promise<DraftWork[]> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   const { data } = await apiClient.get<{ drafts: DraftWork[] }>(
     `${backend}/api/drafts`
   )
@@ -165,7 +249,7 @@ export async function getDraft(
   entityType: string,
   entityId: string
 ): Promise<DraftWork | null> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   const { data } = await apiClient.get<DraftWork>(
     `${backend}/api/drafts/${entityType}/${entityId}`
   )
@@ -177,7 +261,7 @@ export async function saveDraft(
   entityId: string,
   draftRequest: DraftSaveRequest
 ): Promise<DraftWork | null> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   const { data } = await apiClient.put<DraftWork>(
     `${backend}/api/drafts/${entityType}/${entityId}`,
     draftRequest
@@ -189,7 +273,7 @@ export async function discardDraft(
   entityType: string,
   entityId: string
 ): Promise<void> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   await apiClient.delete(`${backend}/api/drafts/${entityType}/${entityId}`)
 }
 
@@ -199,7 +283,7 @@ export async function discardDraft(
 export async function syncOfflineQueue(
   changes: OfflineChange[]
 ): Promise<SyncBatchResponse | null> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   const { data } = await apiClient.post<SyncBatchResponse>(
     `${backend}/api/sync/batch`,
     { changes }
@@ -210,7 +294,7 @@ export async function syncOfflineQueue(
 export async function resolveConflict(
   resolution: ConflictResolution
 ): Promise<void> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const backend = getBackendUrl()
   await apiClient.post(`${backend}/api/sync/resolve`, resolution)
 }
 
@@ -220,6 +304,10 @@ export async function resolveConflict(
 export async function recordWorkflowEvent(
   event: WorkflowAnalyticsEvent
 ): Promise<void> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
-  await apiClient.post(`${backend}/api/analytics/workflow-event`, event)
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const url = buildApiUrl('/api/analytics/workflow-event')
+  await apiClient.post(url, event)
 }

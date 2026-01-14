@@ -5,8 +5,7 @@
  * Wraps the useWorkflowSession hook with convenient helpers.
  */
 
-'use client'
-
+import { useCallback, useMemo } from 'react'
 import { useWorkflowSession } from '@/lib/workflow/session-context'
 import type { NavigationEntry } from '@/types/workflow'
 
@@ -20,6 +19,9 @@ export function useSessionState() {
     isOnline,
     updateNavigation,
     updateActiveEntity,
+    setFilters: contextSetFilters,
+    setScrollPosition: contextSetScrollPosition,
+    setUIState: contextSetUIState,
     pushNavigation,
     popNavigation,
     getNavigationHistory,
@@ -35,12 +37,12 @@ export function useSessionState() {
   /**
    * Get active entity
    */
-  const activeEntity = sessionState
+  const activeEntity = useMemo(() => sessionState
     ? {
-        type: sessionState.active_entity_type,
-        id: sessionState.active_entity_id,
-      }
-    : null
+      type: sessionState.active_entity_type,
+      id: sessionState.active_entity_id,
+    }
+    : null, [sessionState?.active_entity_type, sessionState?.active_entity_id])
 
   /**
    * Get navigation history
@@ -50,109 +52,76 @@ export function useSessionState() {
   /**
    * Get scroll position for a path
    */
-  const getScrollPosition = (path: string): number => {
+  const getScrollPosition = useCallback((path: string): number => {
     return sessionState?.scroll_position?.[path] || 0
-  }
+  }, [sessionState])
 
   /**
    * Set scroll position for current path
    */
-  const setScrollPosition = async (position: number) => {
-    if (!sessionState) return
-
-    const newScrollPosition = {
-      ...sessionState.scroll_position,
-      [sessionState.current_path]: position,
-    }
-
-    await updateNavigation(
-      sessionState.current_path,
-      sessionState.active_entity_type || undefined,
-      sessionState.active_entity_id || undefined
-    )
-  }
+  const setScrollPosition = useCallback(async (position: number) => {
+    await contextSetScrollPosition(currentPath, position)
+  }, [currentPath, contextSetScrollPosition])
 
   /**
    * Get filters for current path
    */
-  const getFilters = <T = Record<string, any>>(): T => {
-    if (!sessionState?.current_path) return {} as T
-    return (sessionState.filters?.[sessionState.current_path] as T) || ({} as T)
-  }
+  const getFilters = useCallback(<T = Record<string, any>>(): T => {
+    if (!sessionState?.filters || !currentPath) return {} as T
+    return (sessionState.filters[currentPath] as T) || ({} as T)
+  }, [sessionState?.filters, currentPath])
 
   /**
    * Set filters for current path
    */
-  const setFilters = async <T = Record<string, any>>(filters: T) => {
-    if (!sessionState) return
-
-    const newFilters = {
-      ...sessionState.filters,
-      [sessionState.current_path]: filters,
-    }
-
-    await updateNavigation(
-      sessionState.current_path,
-      sessionState.active_entity_type || undefined,
-      sessionState.active_entity_id || undefined
-    )
-  }
+  const setFilters = useCallback(async <T = Record<string, any>>(filters: T) => {
+    await contextSetFilters(currentPath, filters)
+  }, [currentPath, contextSetFilters])
 
   /**
    * Get UI state for current path
    */
-  const getUIState = <T = Record<string, any>>(): T => {
-    if (!sessionState?.current_path) return {} as T
-    return (sessionState.ui_state?.[sessionState.current_path] as T) || ({} as T)
-  }
+  const getUIState = useCallback(<T = Record<string, any>>(): T => {
+    if (!sessionState?.ui_state || !currentPath) return {} as T
+    return (sessionState.ui_state[currentPath] as T) || ({} as T)
+  }, [sessionState?.ui_state, currentPath])
 
   /**
    * Set UI state for current path
    */
-  const setUIState = async <T = Record<string, any>>(uiState: T) => {
-    if (!sessionState) return
-
-    const newUIState = {
-      ...sessionState.ui_state,
-      [sessionState.current_path]: uiState,
-    }
-
-    await updateNavigation(
-      sessionState.current_path,
-      sessionState.active_entity_type || undefined,
-      sessionState.active_entity_id || undefined
-    )
-  }
+  const setUIState = useCallback(async <T = Record<string, any>>(uiState: T) => {
+    await contextSetUIState(currentPath, uiState)
+  }, [currentPath, contextSetUIState])
 
   /**
    * Navigate and record in history
    */
-  const navigateWithHistory = async (
+  const navigateWithHistory = useCallback(async (
     path: string,
     entityType?: string,
     entityId?: string
   ) => {
     // Push current location to history before navigating
-    if (sessionState?.current_path) {
+    if (currentPath) {
       const entry: NavigationEntry = {
-        path: sessionState.current_path,
+        path: currentPath,
         timestamp: new Date().toISOString(),
-        entity_type: sessionState.active_entity_type || null,
-        entity_id: sessionState.active_entity_id || null,
+        entity_type: activeEntity?.type || null,
+        entity_id: activeEntity?.id || null,
       }
       pushNavigation(entry)
     }
 
     // Update to new location
     await updateNavigation(path, entityType, entityId)
-  }
+  }, [currentPath, activeEntity, pushNavigation, updateNavigation])
 
   /**
    * Go back in navigation history
    */
-  const goBack = () => {
+  const goBack = useCallback(() => {
     popNavigation()
-  }
+  }, [popNavigation])
 
   /**
    * Check if can go back

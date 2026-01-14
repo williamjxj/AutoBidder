@@ -20,6 +20,9 @@ interface SessionContextType {
   isOnline: boolean
   updateNavigation: (path: string, entityType?: string, entityId?: string) => Promise<void>
   updateActiveEntity: (entityType: string | null, entityId: string | null) => Promise<void>
+  setFilters: (path: string, filters: any) => Promise<void>
+  setScrollPosition: (path: string, position: number) => Promise<void>
+  setUIState: (path: string, uiState: any) => Promise<void>
   pushNavigation: (entry: NavigationEntry) => void
   popNavigation: () => void
   getNavigationHistory: () => NavigationEntry[]
@@ -43,6 +46,124 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
+  // Use a ref to always have the latest state in callbacks without re-creating them
+  const stateRef = React.useRef<SessionState | null>(null)
+  const lastSyncRef = React.useRef<number>(0)
+  const syncWithServerRef = React.useRef<((force?: boolean) => Promise<void>) | null>(null)
+
+  useEffect(() => {
+    stateRef.current = sessionState
+  }, [sessionState])
+
+  /**
+   * Sync session state with server
+   * TEMPORARILY DISABLED to prevent infinite loop
+   */
+  const syncWithServer = useCallback(async (force = false) => {
+    const currentState = stateRef.current
+    if (!currentState || !navigator.onLine) return
+
+    // Debounce: don't sync more than once every 2 seconds unless forced
+    const now = Date.now()
+    if (!force && now - lastSyncRef.current < 2000) {
+      return
+    }
+    lastSyncRef.current = now
+
+    try {
+      const updated = await updateSessionState({
+        current_path: currentState.current_path,
+        navigation_history: currentState.navigation_history,
+        active_entity_type: currentState.active_entity_type,
+        active_entity_id: currentState.active_entity_id,
+        scroll_position: currentState.scroll_position,
+        filters: currentState.filters,
+        ui_state: currentState.ui_state,
+      })
+
+      if (updated) {
+        // Only update if state actually changed to prevent infinite loops
+        const currentStateStr = JSON.stringify(currentState)
+        const updatedStr = JSON.stringify(updated)
+        if (currentStateStr !== updatedStr) {
+          setSessionState(updated)
+          LocalStorage.set(SESSION_STORAGE_KEY, updated)
+        }
+      }
+    } catch (error) {
+      // Silently fail - don't log 404s as errors (backend might not be running)
+      if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+        console.error('Error syncing session with server:', error)
+      }
+    }
+  }, []) // No dependencies - uses refs and navigator.onLine directly
+
+  // Update ref when syncWithServer changes
+  useEffect(() => {
+    syncWithServerRef.current = syncWithServer
+  }, [syncWithServer])
+
+  /**
+   * Update navigation state
+   */
+  const updateNavigation = useCallback(
+    async (path: string, entityType?: string, entityId?: string) => {
+      const currentState = stateRef.current
+
+      // Avoid redundant updates
+      if (
+        currentState?.current_path === path &&
+        currentState?.active_entity_type === (entityType || null) &&
+        currentState?.active_entity_id === (entityId || null)
+      ) {
+        return
+      }
+
+      const newState: SessionState = {
+        id: currentState?.id || crypto.randomUUID(),
+        user_id: currentState?.user_id || '',
+        current_path: path,
+        active_entity_type: entityType !== undefined ? entityType : (currentState?.active_entity_type || null),
+        active_entity_id: entityId !== undefined ? entityId : (currentState?.active_entity_id || null),
+        navigation_history: currentState?.navigation_history || [],
+        scroll_position: currentState?.scroll_position || {},
+        filters: currentState?.filters || {},
+        ui_state: currentState?.ui_state || {},
+        last_activity_at: new Date().toISOString(),
+        created_at: currentState?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      setSessionState(newState)
+      LocalStorage.set(SESSION_STORAGE_KEY, newState)
+
+      // TEMPORARILY DISABLED - API calls causing infinite loop
+      // Sync with server if online (debounced)
+      if (isOnline) {
+        try {
+          // Use syncWithServer which has debouncing built-in
+          await syncWithServer(true)
+        } catch (error) {
+          // Silently fail - don't log 404s as errors (backend might not be running)
+          if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+            console.error('Error updating navigation on server:', error)
+          }
+        }
+      }
+
+      // Record analytics event (fire and forget, don't block)
+      recordWorkflowEvent({
+        event_type: 'navigation',
+        entity_type: entityType || null,
+        entity_id: entityId || null,
+        metadata: { from: currentState?.current_path, to: path },
+      }).catch(() => {
+        // Silently fail analytics
+      })
+    },
+    [isOnline, syncWithServer]
+  )
+
   // Check browser support on mount
   useEffect(() => {
     const support = BrowserSupport.getSupport()
@@ -60,11 +181,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       try {
         // Try loading from localStorage first (faster)
         const cached = LocalStorage.get<SessionState | null>(SESSION_STORAGE_KEY, null)
-        
+
         if (cached) {
           setSessionState(cached)
           setIsLoading(false)
-          
+
           // Sync with server in background
           syncWithServer()
         } else {
@@ -83,7 +204,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     }
 
     initSession()
-  }, [])
+  }, [syncWithServer]) // Added syncWithServer as dependency
 
   // Monitor online/offline status
   useEffect(() => {
@@ -108,18 +229,21 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [])
+  }, [syncWithServer]) // Added syncWithServer as dependency
 
   // Periodic sync with server
   useEffect(() => {
     if (!sessionState || !isOnline) return
 
     const interval = setInterval(() => {
-      syncWithServer()
+      // Use ref to avoid dependency issues
+      if (syncWithServerRef.current) {
+        syncWithServerRef.current()
+      }
     }, SYNC_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [sessionState, isOnline])
+  }, [sessionState?.id, isOnline]) // Only re-run if session ID changes or online status changes
 
   // Track route changes
   useEffect(() => {
@@ -127,88 +251,24 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
     // Only track dashboard routes
     if (pathname.startsWith('/dashboard')) {
-      updateNavigation(pathname)
+      // Only update if path actually changed
+      if (sessionState.current_path !== pathname) {
+        updateNavigation(pathname)
+      }
     }
-  }, [pathname])
+  }, [pathname, sessionState?.current_path, updateNavigation])
 
-  /**
-   * Sync session state with server
-   */
-  const syncWithServer = useCallback(async () => {
-    if (!sessionState || !isOnline) return
-
-    try {
-      const updated = await updateSessionState({
-        current_path: sessionState.current_path,
-        navigation_history: sessionState.navigation_history,
-        active_entity_type: sessionState.active_entity_type,
-        active_entity_id: sessionState.active_entity_id,
-        scroll_position: sessionState.scroll_position,
-        filters: sessionState.filters,
-        ui_state: sessionState.ui_state,
-      })
-
-      if (updated) {
-        setSessionState(updated)
-        LocalStorage.set(SESSION_STORAGE_KEY, updated)
-      }
-    } catch (error) {
-      console.error('Error syncing session with server:', error)
-    }
-  }, [sessionState, isOnline])
-
-  /**
-   * Update navigation state
-   */
-  const updateNavigation = useCallback(
-    async (path: string, entityType?: string, entityId?: string) => {
-      const newState: SessionState = {
-        ...sessionState,
-        id: sessionState?.id || crypto.randomUUID(),
-        user_id: sessionState?.user_id || '',
-        current_path: path,
-        active_entity_type: entityType || null,
-        active_entity_id: entityId || null,
-        navigation_history: sessionState?.navigation_history || [],
-        scroll_position: sessionState?.scroll_position || {},
-        filters: sessionState?.filters || {},
-        ui_state: sessionState?.ui_state || {},
-        created_at: sessionState?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      setSessionState(newState)
-      LocalStorage.set(SESSION_STORAGE_KEY, newState)
-
-      // Sync with server if online
-      if (isOnline) {
-        try {
-          await updateSessionState(newState)
-        } catch (error) {
-          console.error('Error updating navigation on server:', error)
-        }
-      }
-
-      // Record analytics event
-      await recordWorkflowEvent({
-        event_type: 'navigation',
-        entity_type: entityType || null,
-        entity_id: entityId || null,
-        metadata: { from: sessionState?.current_path, to: path },
-      })
-    },
-    [sessionState, isOnline]
-  )
 
   /**
    * Update active entity
    */
   const updateActiveEntity = useCallback(
     async (entityType: string | null, entityId: string | null) => {
-      if (!sessionState) return
+      const currentState = stateRef.current
+      if (!currentState) return
 
       const newState: SessionState = {
-        ...sessionState,
+        ...currentState,
         active_entity_type: entityType,
         active_entity_id: entityId,
         updated_at: new Date().toISOString(),
@@ -219,13 +279,135 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
       if (isOnline) {
         try {
-          await updateSessionState(newState)
+          // Use syncWithServer which has debouncing built-in
+          await syncWithServer(true)
         } catch (error) {
-          console.error('Error updating active entity on server:', error)
+          // Silently fail - don't log 404s as errors (backend might not be running)
+          if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+            console.error('Error updating active entity on server:', error)
+          }
         }
       }
     },
-    [sessionState, isOnline]
+    [isOnline, syncWithServer]
+  )
+
+  /**
+   * Set filters for a path
+   */
+  const setFilters = useCallback(
+    async (path: string, filters: any) => {
+      const currentState = stateRef.current
+      if (!currentState) return
+
+      // Simple equality check to avoid redundant updates
+      if (JSON.stringify(currentState.filters[path]) === JSON.stringify(filters)) {
+        return
+      }
+
+      const newState: SessionState = {
+        ...currentState,
+        filters: {
+          ...currentState.filters,
+          [path]: filters,
+        },
+        updated_at: new Date().toISOString(),
+      }
+
+      setSessionState(newState)
+      LocalStorage.set(SESSION_STORAGE_KEY, newState)
+
+      if (isOnline) {
+        // Use syncWithServer which has debouncing built-in
+        try {
+          await syncWithServer(true)
+        } catch (error) {
+          // Silently fail - don't log 404s as errors (backend might not be running)
+          if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+            console.error('Error updating filters on server:', error)
+          }
+        }
+      }
+    },
+    [isOnline, syncWithServer]
+  )
+
+  /**
+   * Set scroll position for a path
+   */
+  const setScrollPosition = useCallback(
+    async (path: string, position: number) => {
+      const currentState = stateRef.current
+      if (!currentState) return
+
+      if (currentState.scroll_position[path] === position) {
+        return
+      }
+
+      const newState: SessionState = {
+        ...currentState,
+        scroll_position: {
+          ...currentState.scroll_position,
+          [path]: position,
+        },
+        updated_at: new Date().toISOString(),
+      }
+
+      setSessionState(newState)
+      LocalStorage.set(SESSION_STORAGE_KEY, newState)
+
+      if (isOnline) {
+        // Use syncWithServer which has debouncing built-in
+        try {
+          await syncWithServer(true)
+        } catch (error) {
+          // Silently fail - don't log 404s as errors (backend might not be running)
+          if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+            console.error('Error updating scroll position on server:', error)
+          }
+        }
+      }
+    },
+    [isOnline, syncWithServer]
+  )
+
+  /**
+   * Set UI state for a path
+   */
+  const setUIState = useCallback(
+    async (path: string, uiState: any) => {
+      const currentState = stateRef.current
+      if (!currentState) return
+
+      if (JSON.stringify(currentState.ui_state[path]) === JSON.stringify(uiState)) {
+        return
+      }
+
+      const newState: SessionState = {
+        ...currentState,
+        ui_state: {
+          ...currentState.ui_state,
+          [path]: uiState,
+        },
+        updated_at: new Date().toISOString(),
+      }
+
+      setSessionState(newState)
+      LocalStorage.set(SESSION_STORAGE_KEY, newState)
+
+      if (isOnline) {
+        try {
+          // Use syncWithServer which has debouncing built-in
+          await syncWithServer(true)
+        } catch (error) {
+          // Silently fail - don't log 404s as errors (backend might not be running)
+          if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+            console.error('Error updating UI state on server:', error)
+          }
+        }
+      }
+    },
+    [isOnline, syncWithServer]
   )
 
   /**
@@ -236,7 +418,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       if (!sessionState) return
 
       const history = [...(sessionState.navigation_history || []), entry]
-      
+
       // Keep only last 50 entries
       const trimmedHistory = history.slice(-50)
 
@@ -306,6 +488,9 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     isOnline,
     updateNavigation,
     updateActiveEntity,
+    setFilters,
+    setScrollPosition,
+    setUIState,
     pushNavigation,
     popNavigation,
     getNavigationHistory,
@@ -325,10 +510,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
  */
 export function useWorkflowSession() {
   const context = useContext(SessionContext)
-  
+
   if (!context) {
     throw new Error('useWorkflowSession must be used within WorkflowProvider')
   }
-  
+
   return context
 }

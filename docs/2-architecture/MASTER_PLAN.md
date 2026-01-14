@@ -345,7 +345,6 @@ components/
 
 ```bash
 # 1. Create new unified project directory
-cd /Users/william.jiang/my-experiments/bidding
 mkdir bidmaster-pro
 cd bidmaster-pro
 

@@ -15,7 +15,7 @@ This guide helps developers set up the Workflow Optimization feature for local d
 ### 1.1 Pull Latest Code
 
 ```bash
-cd /Users/william.jiang/my-experiments/bidding/auto-bidder
+cd ./auto-bidder
 git checkout 001-smooth-workflow
 git pull origin 001-smooth-workflow
 ```

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database (optional for local development)
   postgres:
@@ -30,34 +28,33 @@ services:
       - ANONYMIZED_TELEMETRY=FALSE
     networks:
       - auto-bidder-network
-
   # Python FastAPI Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: auto-bidder-backend
-    ports:
-      - "8000:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - CHROMA_PERSIST_DIR=/app/chroma_db
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auto_bidder_dev
-      - SESSION_STATE_TTL_HOURS=24
-      - DRAFT_RETENTION_HOURS=24
-      - MAX_DRAFT_SIZE_KB=1000
-      - ENABLE_WORKFLOW_ANALYTICS=true
-    volumes:
-      - ./backend:/app
-      - chromadb_data:/app/chroma_db
-    depends_on:
-      - postgres
-      - chromadb
-    networks:
-      - auto-bidder-network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: auto-bidder-backend
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - SUPABASE_URL=${SUPABASE_URL}
+  #     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+  #     - CHROMA_PERSIST_DIR=/app/chroma_db
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auto_bidder_dev
+  #     - SESSION_STATE_TTL_HOURS=24
+  #     - DRAFT_RETENTION_HOURS=24
+  #     - MAX_DRAFT_SIZE_KB=1000
+  #     - ENABLE_WORKFLOW_ANALYTICS=true
+  #   volumes:
+  #     - ./backend:/app
+  #     - chromadb_data:/app/chroma_db
+  #   depends_on:
+  #     - postgres
+  #     - chromadb
+  #   networks:
+  #     - auto-bidder-network
+  #   command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Next.js Frontend (optional - usually run with npm run dev)
   # frontend:
@@ -79,6 +76,7 @@ services:
 volumes:
   postgres_data:
   chromadb_data:
+
 
 networks:
   auto-bidder-network:

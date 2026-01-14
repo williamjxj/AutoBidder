@@ -98,6 +98,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - External API calls (http:// or https://)
+     * Note: Middleware only runs on same-origin requests, so external URLs won't be intercepted
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

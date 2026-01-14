@@ -8,35 +8,35 @@
 // Session State Types
 export interface SessionState {
   id: string;
-  userId: string;
-  activeFeature: 
-    | 'projects' 
-    | 'proposals' 
-    | 'keywords' 
-    | 'analytics' 
-    | 'knowledge-base' 
-    | 'settings'
-    | 'strategies'
-    | 'dashboard';
-  entityId?: string | null;
-  contextData: Record<string, any>;
-  navigationHistory: NavigationEntry[];
-  lastActivityAt: string;
-  createdAt: string;
-  updatedAt: string;
+  user_id: string;
+  current_path: string;
+  active_entity_type: string | null;
+  active_entity_id: string | null;
+  navigation_history: NavigationEntry[];
+  scroll_position: Record<string, number>;
+  filters: Record<string, any>;
+  ui_state: Record<string, any>;
+  last_activity_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface NavigationEntry {
   path: string;
   timestamp: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
   metadata?: Record<string, any>;
 }
 
 export interface SessionStateUpdate {
-  activeFeature?: SessionState['activeFeature'];
-  entityId?: string | null;
-  contextData?: Record<string, any>;
-  navigationEntry?: NavigationEntry;
+  current_path?: string;
+  active_entity_type?: string | null;
+  active_entity_id?: string | null;
+  navigation_history?: NavigationEntry[];
+  scroll_position?: Record<string, number>;
+  filters?: Record<string, any>;
+  ui_state?: Record<string, any>;
 }
 
 // Draft Work Types
@@ -114,15 +114,12 @@ export interface ConflictResolution {
 // Workflow Analytics Types
 export interface WorkflowAnalyticsEvent {
   id?: string;
-  userId?: string;
-  eventType: string;
-  eventCategory: 'performance' | 'user_action' | 'error' | 'recovery';
-  durationMs?: number;
-  success?: boolean;
-  errorMessage?: string;
+  user_id?: string;
+  event_type: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
   metadata?: Record<string, any>;
-  userAgent?: string;
-  createdAt?: string;
+  created_at?: string;
 }
 
 // Browser Support Detection
