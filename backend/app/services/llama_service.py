@@ -1,6 +1,6 @@
-from llama_index import VectorStoreIndex, SimpleDirectoryReader, ServiceContext
-from llama_index.embeddings import HuggingFaceEmbedding
-from llama_index.llms import OpenAI
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings, Document
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.openai import OpenAI
 from typing import List, Optional
 from app.core.config import settings
 import os
@@ -21,23 +21,17 @@ class LlamaIndexService:
             api_key=settings.OPENAI_API_KEY
         )
         
-        self.service_context = ServiceContext.from_defaults(
-            llm=self.llm,
-            embed_model=self.embed_model
-        )
+        # Configure global settings
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
         
         self.index = None
     
     def create_index_from_documents(self, documents: List[str]) -> VectorStoreIndex:
         """Create an index from a list of documents."""
-        from llama_index import Document
-        
         docs = [Document(text=doc) for doc in documents]
         
-        self.index = VectorStoreIndex.from_documents(
-            docs,
-            service_context=self.service_context
-        )
+        self.index = VectorStoreIndex.from_documents(docs)
         
         return self.index
     
@@ -49,10 +43,7 @@ class LlamaIndexService:
         
         documents = SimpleDirectoryReader(directory_path).load_data()
         
-        self.index = VectorStoreIndex.from_documents(
-            documents,
-            service_context=self.service_context
-        )
+        self.index = VectorStoreIndex.from_documents(documents)
         
         return self.index
     
