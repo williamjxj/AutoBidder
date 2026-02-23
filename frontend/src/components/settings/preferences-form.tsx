@@ -16,8 +16,9 @@ export function PreferencesForm() {
 
   const [formData, setFormData] = useState<UserPreferences>({
     theme: 'light',
-    notifications_enabled: true,
-    email_notifications: true,
+    notification_email: true,
+    notification_browser: true,
+    language: 'en',
     default_strategy_id: null,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -25,7 +26,13 @@ export function PreferencesForm() {
   // Load settings when available
   useEffect(() => {
     if (settings?.preferences) {
-      setFormData(settings.preferences)
+      setFormData({
+        theme: settings.preferences.theme ?? 'light',
+        notification_email: settings.preferences.notification_email ?? true,
+        notification_browser: settings.preferences.notification_browser ?? true,
+        language: settings.preferences.language ?? 'en',
+        default_strategy_id: settings.preferences.default_strategy_id ?? null,
+      })
     }
   }, [settings])
 
@@ -69,27 +76,26 @@ export function PreferencesForm() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <input
-                id="notifications_enabled"
+                id="notification_browser"
                 type="checkbox"
-                checked={formData.notifications_enabled}
-                onChange={(e) => setFormData({ ...formData, notifications_enabled: e.target.checked })}
+                checked={formData.notification_browser}
+                onChange={(e) => setFormData({ ...formData, notification_browser: e.target.checked })}
                 className="h-4 w-4 rounded border-slate-300"
               />
-              <label htmlFor="notifications_enabled" className="text-sm font-medium">
-                Enable notifications
+              <label htmlFor="notification_browser" className="text-sm font-medium">
+                Browser notifications
               </label>
             </div>
 
             <div className="flex items-center gap-2">
               <input
-                id="email_notifications"
+                id="notification_email"
                 type="checkbox"
-                checked={formData.email_notifications}
-                onChange={(e) => setFormData({ ...formData, email_notifications: e.target.checked })}
+                checked={formData.notification_email}
+                onChange={(e) => setFormData({ ...formData, notification_email: e.target.checked })}
                 className="h-4 w-4 rounded border-slate-300"
-                disabled={!formData.notifications_enabled}
               />
-              <label htmlFor="email_notifications" className="text-sm font-medium">
+              <label htmlFor="notification_email" className="text-sm font-medium">
                 Email notifications
               </label>
             </div>

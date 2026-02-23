@@ -3,21 +3,14 @@ Authentication Service - User Management and JWT Handling
 """
 
 import asyncpg
-import warnings
+import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from fastapi import HTTPException, status
 import uuid
 
 from app.config import settings
-
-# Suppress passlib bcrypt version warning (known compatibility issue with bcrypt 4.x)
-warnings.filterwarnings("ignore", message=".*trapped.*error reading bcrypt version.*")
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = settings.jwt_secret
@@ -36,15 +29,22 @@ class AuthService:
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt."""
         # Bcrypt has a 72-byte limit, truncate password to be safe
-        # This handles multi-byte UTF-8 characters correctly
         password_bytes = password.encode('utf-8')[:72]
-        password_truncated = password_bytes.decode('utf-8', errors='ignore')
-        return pwd_context.hash(password_truncated)
+        # Generate salt and hash the password
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        return hashed.decode('utf-8')
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against a hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            # Bcrypt has a 72-byte limit, truncate password the same way as hashing
+            password_bytes = plain_password.encode('utf-8')[:72]
+            hashed_bytes = hashed_password.encode('utf-8')
+            return bcrypt.checkpw(password_bytes, hashed_bytes)
+        except Exception:
+            return False
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

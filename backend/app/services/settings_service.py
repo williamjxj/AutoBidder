@@ -13,9 +13,11 @@ from app.core.errors import AutoBidderError
 from app.models.settings import (
     UserSettings,
     UserPreferences,
+    UserProfile,
     PlatformCredential,
     CredentialUpsert,
     SubscriptionInfo,
+    UsageQuota,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,51 +43,73 @@ class SettingsService:
             pool = await get_db_pool()
             async with pool.acquire() as conn:
                 # Get user profile for preferences
-                profile = await conn.fetchrow(
+                profile_row = await conn.fetchrow(
                     "SELECT * FROM user_profiles WHERE user_id = $1",
                     user_id
                 )
                 
-                if not profile:
-                    # Return default settings if profile doesn't exist
-                    return UserSettings(
+                # Create default profile if doesn't exist
+                if not profile_row:
+                    profile = UserProfile(
                         user_id=user_id,
-                        preferences=UserPreferences(),
-                        subscription=None,
+                        subscription_tier='free',
+                        subscription_status='active',
+                    )
+                else:
+                    profile = UserProfile(
+                        user_id=str(profile_row.get("user_id")),
+                        subscription_tier=profile_row.get("subscription_tier", "free"),
+                        subscription_status=profile_row.get("subscription_status", "active"),
                     )
 
                 # Extract preferences from profile
                 preferences = UserPreferences(
-                    theme=profile.get("theme", "light"),
-                    notifications_enabled=profile.get("notifications_enabled", True),
-                    email_notifications=profile.get("email_notifications", True),
-                    default_strategy_id=profile.get("default_strategy_id"),
+                    theme=profile_row.get("theme", "system") if profile_row else "system",
+                    language=profile_row.get("language", "en") if profile_row else "en",
+                    notification_email=profile_row.get("notification_email", True) if profile_row else True,
+                    notification_browser=profile_row.get("notification_browser", True) if profile_row else True,
+                    default_strategy_id=profile_row.get("default_strategy_id") if profile_row else None,
                 )
 
-                # Get subscription info (if exists)
-                subscription = None
+                # Get platform credentials
+                credentials = []
                 try:
-                    sub_row = await conn.fetchrow(
-                        """
-                        SELECT * FROM user_subscriptions
-                        WHERE user_id = $1 AND status = 'active'
-                        LIMIT 1
-                        """,
+                    cred_rows = await conn.fetch(
+                        "SELECT id, user_id, platform, is_active, last_verified_at, verification_error, expires_at FROM platform_credentials WHERE user_id = $1",
                         user_id
                     )
-                    
-                    if sub_row:
-                        subscription = SubscriptionInfo(
-                            plan=sub_row.get("plan", "free"),
-                            status=sub_row.get("status", "active"),
-                            expires_at=sub_row.get("expires_at"),
-                        )
+                    for row in cred_rows:
+                        credentials.append(PlatformCredential(
+                            id=str(row["id"]),
+                            user_id=str(row["user_id"]),
+                            platform=row["platform"],
+                            is_active=row.get("is_active", True),
+                            last_verified_at=row.get("last_verified_at"),
+                            verification_error=row.get("verification_error"),
+                            expires_at=row.get("expires_at"),
+                        ))
                 except Exception as e:
-                    logger.warning(f"Failed to fetch subscription: {e}")
+                    logger.warning(f"Failed to fetch credentials: {e}")
+
+                # Get usage quota
+                usage_quota = UsageQuota(
+                    proposals_generated=0,
+                    proposals_limit=10 if profile.subscription_tier == 'free' else 100,
+                    period_start=None,
+                )
+
+                # Create subscription info
+                subscription = SubscriptionInfo(
+                    tier=profile.subscription_tier,
+                    status=profile.subscription_status,
+                    expires_at=None,
+                    usage_quota=usage_quota,
+                )
 
                 return UserSettings(
-                    user_id=user_id,
+                    profile=profile,
                     preferences=preferences,
+                    credentials=credentials,
                     subscription=subscription,
                 )
         except Exception as e:

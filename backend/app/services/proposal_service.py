@@ -3,7 +3,7 @@ import json
 from typing import List, Optional
 from uuid import UUID
 
-from app.core.database import get_db
+from app.core.database import get_db_pool
 from app.models.proposal import (
     Proposal,
     ProposalCreate,
@@ -43,7 +43,7 @@ async def list_proposals(
     offset: int = 0,
 ) -> List[Proposal]:
     """List proposals for a user with optional filtering."""
-    db = await get_db()
+    db = await get_db_pool()
     
     query = """
         SELECT * FROM proposals 
@@ -64,7 +64,7 @@ async def list_proposals(
 
 async def get_proposal(proposal_id: UUID, user_id: UUID) -> Optional[Proposal]:
     """Get a single proposal by ID."""
-    db = await get_db()
+    db = await get_db_pool()
     
     row = await db.fetchrow(
         "SELECT * FROM proposals WHERE id = $1 AND user_id = $2",
@@ -83,7 +83,7 @@ async def create_proposal(
     proposal_data: ProposalCreate,
 ) -> Proposal:
     """Create a new proposal."""
-    db = await get_db()
+    db = await get_db_pool()
     
     row = await db.fetchrow(
         """
@@ -119,7 +119,7 @@ async def update_proposal(
     proposal_data: ProposalUpdate,
 ) -> Optional[Proposal]:
     """Update an existing proposal."""
-    db = await get_db()
+    db = await get_db_pool()
     
     # Build dynamic update query
     update_fields = []
@@ -228,7 +228,7 @@ async def update_proposal(
 
 async def delete_proposal(proposal_id: UUID, user_id: UUID) -> bool:
     """Delete a proposal."""
-    db = await get_db()
+    db = await get_db_pool()
     
     result = await db.execute(
         "DELETE FROM proposals WHERE id = $1 AND user_id = $2",
@@ -245,7 +245,7 @@ async def submit_from_draft(
     entity_id: str,
 ) -> Optional[Proposal]:
     """Convert a draft to a final proposal and delete the draft."""
-    db = await get_db()
+    db = await get_db_pool()
     
     # Get the draft
     if entity_id == "new":

@@ -204,7 +204,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     }
 
     initSession()
-  }, [syncWithServer]) // Added syncWithServer as dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Monitor online/offline status
   useEffect(() => {
@@ -212,7 +213,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
     function handleOnline() {
       setIsOnline(true)
-      syncWithServer() // Sync when coming back online
+      // Use ref to call syncWithServer to avoid dependency issues
+      if (syncWithServerRef.current) {
+        syncWithServerRef.current()
+      }
     }
 
     function handleOffline() {
@@ -229,7 +233,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [syncWithServer]) // Added syncWithServer as dependency
+  }, []) // Only set up once
 
   // Periodic sync with server
   useEffect(() => {
@@ -256,7 +260,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         updateNavigation(pathname)
       }
     }
-  }, [pathname, sessionState?.current_path, updateNavigation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, sessionState?.current_path])
 
 
   /**
