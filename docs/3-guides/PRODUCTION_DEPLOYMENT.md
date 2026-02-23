@@ -15,7 +15,7 @@ Complete guide for deploying the workflow optimization feature to production.
 ### Database
 - [ ] Migration scripts reviewed
 - [ ] Backup strategy in place
-- [ ] RLS policies configured (if using Supabase)
+- [ ] Database access controls configured
 - [ ] Indexes optimized for performance
 
 ### Security
@@ -36,13 +36,15 @@ Complete guide for deploying the workflow optimization feature to production.
 
 ### 1. Apply Migrations
 
-**If using Supabase:**
-```sql
--- Run in Supabase SQL Editor
-\i database/migrations/004_workflow_optimization.sql
+**Using docker-compose PostgreSQL:**
+```bash
+# Apply all migrations in order
+for migration in database/migrations/*.sql; do
+  docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < "$migration"
+done
 ```
 
-**If using standalone PostgreSQL:**
+**Using hosted PostgreSQL (Neon, AWS RDS, etc.):**
 ```bash
 psql $DATABASE_URL < database/migrations/004_workflow_optimization.sql
 ```
@@ -54,13 +56,17 @@ SELECT tablename FROM pg_tables
 WHERE tablename IN ('user_session_states', 'draft_work', 'workflow_analytics');
 ```
 
-### 3. Configure RLS Policies (Supabase)
+### 3. Configure Database Access Controls
 
-Row-level security is already defined in the migration. Verify policies are active:
+For production deployments, ensure proper database permissions:
 
 ```sql
-SELECT * FROM pg_policies 
-WHERE tablename IN ('user_session_states', 'draft_work', 'workflow_analytics');
+-- Create application user with limited privileges
+CREATE USER app_user WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE auto_bidder_prod TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
 ```
 
 ### 4. Set Up Draft Cleanup Job
@@ -127,9 +133,12 @@ ENVIRONMENT=production
 LOG_LEVEL=INFO
 
 # Database (Update with your production database URL)
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your-service-role-key
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
+
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key-change-this
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_DAYS=7
 
 # Workflow Optimization
 SESSION_STATE_TTL_HOURS=24
@@ -202,11 +211,7 @@ Create `frontend/.env.production`:
 # Backend API
 NEXT_PUBLIC_BACKEND_API_URL=https://api.yourdomain.com
 
-# Supabase (if using Supabase auth)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-
-# Workflow Settings
+# Frontend Settings
 NEXT_PUBLIC_AUTO_SAVE_INTERVAL_MS=10000
 NEXT_PUBLIC_OFFLINE_SYNC_RETRY_MS=5000
 NEXT_PUBLIC_ENABLE_KEYBOARD_SHORTCUTS=true
@@ -531,7 +536,7 @@ Track these KPIs:
 
 - **Performance**: Vercel Analytics
 - **Errors**: Sentry Dashboard
-- **Database**: Supabase Dashboard / PostgreSQL metrics
+- **Database**: PostgreSQL metrics (pg_stat_statements, logs)
 - **API**: FastAPI /docs endpoint
 
 ---

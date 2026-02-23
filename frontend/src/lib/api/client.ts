@@ -3,8 +3,9 @@
  * Handles API requests with authentication headers and error handling
  */
 
-import { createClient } from '@/lib/supabase/client'
 import { errorFormatter } from '@/lib/errors/error-formatter'
+
+const TOKEN_KEY = 'auth_token'
 
 interface RequestOptions extends RequestInit {
   body?: any
@@ -17,18 +18,17 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
-  private async getAuthHeaders(): Promise<HeadersInit> {
-    const supabase = createClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
+  private getAuthHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     }
 
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`
+    // Get token from localStorage (client-side only)
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem(TOKEN_KEY)
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
     }
 
     return headers
@@ -39,7 +39,7 @@ class ApiClient {
     options: RequestOptions = {}
   ): Promise<{ data: T | null; error: string | null }> {
     try {
-      const headers = await this.getAuthHeaders()
+      const headers = this.getAuthHeaders()
 
       const trimmedEndpoint = endpoint.trim()
       if (!trimmedEndpoint) {

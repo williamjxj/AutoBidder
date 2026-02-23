@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 ---
 CREATE TABLE user_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE NOT NULL,
   
   -- Subscription & Billing
   subscription_tier VARCHAR(20) DEFAULT 'free' CHECK (subscription_tier IN ('free', 'pro', 'agency')),
@@ -49,7 +49,7 @@ CREATE INDEX idx_user_profiles_last_activity ON user_profiles(last_activity_at);
 ---
 CREATE TABLE projects (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- Job Details
   title VARCHAR(500) NOT NULL,
@@ -101,7 +101,7 @@ CREATE UNIQUE INDEX idx_projects_unique_external ON projects(source_platform, ex
 ---
 CREATE TABLE bidding_strategies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- Strategy Definition
   name VARCHAR(255) NOT NULL,
@@ -141,7 +141,7 @@ CREATE UNIQUE INDEX idx_strategies_user_name ON bidding_strategies(user_id, LOWE
 CREATE TABLE bids (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   strategy_id UUID REFERENCES bidding_strategies(id) ON DELETE SET NULL,
   
   -- Proposal Content
@@ -187,7 +187,7 @@ CREATE INDEX idx_bids_submitted_at ON bids(submitted_at DESC);
 CREATE INDEX idx_bids_relevant_projects ON bids USING GIN(relevant_projects);
 
 -- Comments
-COMMENT ON TABLE user_profiles IS 'User profile information extending auth.users';
+COMMENT ON TABLE user_profiles IS 'User profile information and preferences';
 COMMENT ON TABLE projects IS 'Job postings from freelance platforms';
 COMMENT ON TABLE bidding_strategies IS 'Reusable AI prompt templates for proposal generation';
 COMMENT ON TABLE bids IS 'AI-generated and user-edited proposals';

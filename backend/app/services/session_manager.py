@@ -2,9 +2,9 @@
 Session Manager Service
 
 Manages user session state operations including retrieval, updates, and deletion.
-Coordinates with Supabase client for database operations.
+Uses PostgreSQL connection pool for database operations.
 """
-
+import json
 from typing import Optional, Dict, Any
 import logging
 from datetime import datetime
@@ -14,7 +14,7 @@ from app.models.session_state import (
     SessionStateCreate,
     SessionStateUpdate,
 )
-from app.services.supabase_client import supabase_service
+from app.core.database import get_db_pool
 from app.core.errors import AutoBidderError
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class SessionManager:
     
     def __init__(self) -> None:
         """Initialize session manager."""
-        self.supabase = supabase_service
+        pass
     
     async def get_state(self, user_id: str) -> Optional[SessionState]:
         """
@@ -43,16 +43,30 @@ class SessionManager:
             SessionState object or None if not found
         """
         try:
-            data = await self.supabase.get_session_state(user_id)
-            
-            if not data:
-                return None
-            
-            # Map entity_id from database to active_entity_id for model
-            if "entity_id" in data and "active_entity_id" not in data:
-                data["active_entity_id"] = data.pop("entity_id")
-            
-            return SessionState(**data)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM user_session_states WHERE user_id = $1",
+                    user_id
+                )
+                
+                if not row:
+                    return None
+                
+                data = dict(row)
+                # Convert UUID objects to strings for Pydantic validation
+                if "id" in data and data["id"]:
+                    data["id"] = str(data["id"])
+                if "user_id" in data and data["user_id"]:
+                    data["user_id"] = str(data["user_id"])
+                if "entity_id" in data and data["entity_id"]:
+                    data["entity_id"] = str(data["entity_id"])
+                
+                # Map entity_id from database to active_entity_id for model
+                if "entity_id" in data and "active_entity_id" not in data:
+                    data["active_entity_id"] = data.pop("entity_id")
+                
+                return SessionState(**data)
         except Exception as e:
             logger.error(f"Error getting session state for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to get session state: {e}")
@@ -76,28 +90,46 @@ class SessionManager:
             AutoBidderError: If creation fails
         """
         try:
-            # Convert Pydantic model to dict
-            # Map active_entity_id to entity_id to match database schema
-            data_dict: Dict[str, Any] = {
-                "user_id": user_id,
-                "current_path": session_data.current_path,
-                "navigation_history": [
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Convert Pydantic model to dict and map active_entity_id to entity_id
+                navigation_history = json.dumps([
                     entry.model_dump() for entry in session_data.navigation_history
-                ],
-                "active_entity_type": session_data.active_entity_type,
-                "entity_id": session_data.active_entity_id,  # Map to database column name
-                "scroll_position": session_data.scroll_position,
-                "filters": session_data.filters,
-                "ui_state": session_data.ui_state,
-            }
-            
-            result = await self.supabase.upsert_session_state(user_id, data_dict)
-            
-            # Map entity_id from database to active_entity_id for model
-            if "entity_id" in result and "active_entity_id" not in result:
-                result["active_entity_id"] = result.pop("entity_id")
-            
-            return SessionState(**result)
+                ])
+                
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO user_session_states 
+                    (user_id, current_path, navigation_history, active_entity_type, 
+                     entity_id, scroll_position, filters, ui_state)
+                    VALUES ($1, $2, $3::jsonb, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb)
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET current_path = EXCLUDED.current_path,
+                        navigation_history = EXCLUDED.navigation_history,
+                        active_entity_type = EXCLUDED.active_entity_type,
+                        entity_id = EXCLUDED.entity_id,
+                        scroll_position = EXCLUDED.scroll_position,
+                        filters = EXCLUDED.filters,
+                        ui_state = EXCLUDED.ui_state,
+                        updated_at = CURRENT_TIMESTAMP
+                    RETURNING *
+                    """,
+                    user_id,
+                    session_data.current_path,
+                    navigation_history,
+                    session_data.active_entity_type,
+                    session_data.active_entity_id,  # Maps to entity_id column
+                    json.dumps(session_data.scroll_position) if session_data.scroll_position else '{}',
+                    json.dumps(session_data.filters) if session_data.filters else '{}',
+                    json.dumps(session_data.ui_state) if session_data.ui_state else '{}',
+                )
+                
+                result = dict(row)
+                # Map entity_id from database to active_entity_id for model
+                if "entity_id" in result and "active_entity_id" not in result:
+                    result["active_entity_id"] = result.pop("entity_id")
+                
+                return SessionState(**result)
         except Exception as e:
             logger.error(f"Error creating session state for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to create session state: {e}")
@@ -124,66 +156,57 @@ class SessionManager:
             # Get current state
             current = await self.get_state(user_id)
             
-            # Build update dict with only provided fields
-            update_dict: Dict[str, Any] = {"user_id": user_id}
+            # Build update values with only provided fields
+            current_path = session_update.current_path if session_update.current_path is not None else (current.current_path if current else "/")
             
-            if session_update.current_path is not None:
-                update_dict["current_path"] = session_update.current_path
-            elif current:
-                update_dict["current_path"] = current.current_path
-            else:
-                update_dict["current_path"] = "/"
+            navigation_history = json.dumps(
+                [entry.model_dump() for entry in session_update.navigation_history]
+                if session_update.navigation_history is not None
+                else ([entry.model_dump() for entry in current.navigation_history] if current else [])
+            )
             
-            if session_update.navigation_history is not None:
-                update_dict["navigation_history"] = [
-                    entry.model_dump() for entry in session_update.navigation_history
-                ]
-            elif current:
-                update_dict["navigation_history"] = [
-                    entry.model_dump() for entry in current.navigation_history
-                ]
-            else:
-                update_dict["navigation_history"] = []
-            
-            if session_update.active_entity_type is not None:
-                update_dict["active_entity_type"] = session_update.active_entity_type
-            elif current:
-                update_dict["active_entity_type"] = current.active_entity_type
-            
-            if session_update.active_entity_id is not None:
-                update_dict["entity_id"] = session_update.active_entity_id  # Map to database column name
-            elif current:
-                update_dict["entity_id"] = current.active_entity_id  # Map to database column name
-            
-            if session_update.scroll_position is not None:
-                update_dict["scroll_position"] = session_update.scroll_position
-            elif current:
-                update_dict["scroll_position"] = current.scroll_position
-            else:
-                update_dict["scroll_position"] = {}
-            
-            if session_update.filters is not None:
-                update_dict["filters"] = session_update.filters
-            elif current:
-                update_dict["filters"] = current.filters
-            else:
-                update_dict["filters"] = {}
-            
-            if session_update.ui_state is not None:
-                update_dict["ui_state"] = session_update.ui_state
-            elif current:
-                update_dict["ui_state"] = current.ui_state
-            else:
-                update_dict["ui_state"] = {}
+            active_entity_type = session_update.active_entity_type if session_update.active_entity_type is not None else (current.active_entity_type if current else None)
+            entity_id = session_update.active_entity_id if session_update.active_entity_id is not None else (current.active_entity_id if current else None)
+            scroll_position = session_update.scroll_position if session_update.scroll_position is not None else (current.scroll_position if current else {})
+            filters = session_update.filters if session_update.filters is not None else (current.filters if current else {})
+            ui_state = session_update.ui_state if session_update.ui_state is not None else (current.ui_state if current else {})
             
             # Upsert (create or update)
-            result = await self.supabase.upsert_session_state(user_id, update_dict)
-            
-            # Map entity_id from database to active_entity_id for model
-            if "entity_id" in result and "active_entity_id" not in result:
-                result["active_entity_id"] = result.pop("entity_id")
-            
-            return SessionState(**result)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO user_session_states 
+                    (user_id, current_path, navigation_history, active_entity_type, 
+                     entity_id, scroll_position, filters, ui_state)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET current_path = EXCLUDED.current_path,
+                        navigation_history = EXCLUDED.navigation_history,
+                        active_entity_type = EXCLUDED.active_entity_type,
+                        entity_id = EXCLUDED.entity_id,
+                        scroll_position = EXCLUDED.scroll_position,
+                        filters = EXCLUDED.filters,
+                        ui_state = EXCLUDED.ui_state,
+                        updated_at = CURRENT_TIMESTAMP
+                    RETURNING *
+                    """,
+                    user_id,
+                    current_path,
+                    navigation_history,
+                    active_entity_type,
+                    entity_id,
+                    json.dumps(scroll_position) if scroll_position else '{}',
+                    json.dumps(filters) if filters else '{}',
+                    json.dumps(ui_state) if ui_state else '{}',
+                )
+                
+                result = dict(row)
+                # Map entity_id from database to active_entity_id for model
+                if "entity_id" in result and "active_entity_id" not in result:
+                    result["active_entity_id"] = result.pop("entity_id")
+                
+                return SessionState(**result)
         except Exception as e:
             logger.error(f"Error updating session state for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to update session state: {e}")
@@ -196,7 +219,12 @@ class SessionManager:
             user_id: User's UUID
         """
         try:
-            await self.supabase.delete_session_state(user_id)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM user_session_states WHERE user_id = $1",
+                    user_id
+                )
             logger.info(f"Deleted session state for user {user_id}")
         except Exception as e:
             logger.error(f"Error deleting session state for user {user_id}: {e}")
@@ -213,11 +241,19 @@ class SessionManager:
             Number of sessions cleaned up
         """
         try:
-            # This would require a custom SQL query or RPC function
-            # For now, log that cleanup would happen here
-            logger.info(f"Session cleanup triggered (TTL: {ttl_hours}h)")
-            # TODO: Implement cleanup query
-            return 0
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    DELETE FROM user_session_states 
+                    WHERE updated_at < NOW() - INTERVAL '$1 hours'
+                    """,
+                    ttl_hours
+                )
+                # Parse result like "DELETE 5" to get count
+                count = int(result.split()[-1]) if result else 0
+                logger.info(f"Cleaned up {count} expired session states (TTL: {ttl_hours}h)")
+                return count
         except Exception as e:
             logger.error(f"Error cleaning up expired sessions: {e}")
             return 0

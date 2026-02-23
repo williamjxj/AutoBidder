@@ -12,26 +12,39 @@ Before starting, ensure you have:
 - ✅ **Python 3.11+** (3.12+ recommended) installed (`python --version`)
 - ✅ **Docker & Docker Compose** installed
 - ✅ **Git** installed
-- ⏳ **Supabase CLI** (`brew install supabase/tap/supabase`)
-- ⏳ **Supabase account** ([supabase.com](https://supabase.com))
-- ⏳ **OpenAI API key** ([platform.openai.com](https://platform.openai.com))
+- ⏳ **DeepSeek or OpenAI API key** (for LLM)
 
 ---
 
 ## 🛠️ Step 1: Infrastructure Setup
 
-### 1. Start PostgreSQL
+### 1. Start PostgreSQL and ChromaDB
 
 We use Docker for local database and vector storage.
 
 ```bash
-docker compose up -d postgres chromadb
+cd auto-bidder
+docker-compose up -d
 ```
 
-### 2. Get API Credentials
+This starts:
+- PostgreSQL on port 5432
+- ChromaDB on port 8001
 
-- **Supabase**: Create a new project, go to **Settings** → **API**, and copy the `Project URL`, `anon/public` key, and `service_role` key.
-- **OpenAI**: Create a new secret key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+### 2. Apply Database Migrations
+
+```bash
+# Enable PostgreSQL extensions
+docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";"
+
+# Apply migrations
+docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/006_custom_auth_users.sql
+```
+
+### 3. Get API Credentials
+
+- **DeepSeek**: Get your API key at [platform.deepseek.com](https://platform.deepseek.com)
+- Or **OpenAI**: Get your key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
 ---
 
@@ -47,8 +60,7 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxxxxxxxxxx
+NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
 PYTHON_AI_SERVICE_URL=http://localhost:8000
 ```
 
@@ -62,9 +74,24 @@ cp .env.example .env
 Edit `.env`:
 
 ```bash
-OPENAI_API_KEY=sk-xxxxxxxxxxxx
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJxxxxxxxxxxxx
+# Database (docker-compose PostgreSQL)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/auto_bidder_dev
+
+# JWT Authentication
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_MINUTES=10080
+
+# LLM Provider (choose one)
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-your-deepseek-key-here
+DEEPSEEK_MODEL=deepseek-chat
+
+# Or use OpenAI
+# LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-your-openai-key-here
+
+# ChromaDB
 CHROMA_PERSIST_DIR=./chroma_db
 ```
 
@@ -72,19 +99,7 @@ CHROMA_PERSIST_DIR=./chroma_db
 
 ## 🏃 Step 3: Start the Application
 
-### Terminal 1: Database Migrations
-
-```bash
-cd ..
-# Initialize Supabase (first time only)
-supabase init
-supabase start
-
-# Apply migrations
-supabase db reset
-```
-
-### Terminal 2: Backend (Python)
+### Terminal 1: Backend (Python)
 
 ```bash
 cd backend
@@ -94,7 +109,13 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Terminal 3: Frontend (Next.js)
+You should see:
+```
+🚀 Auto-Bidder AI Service starting...
+✅ Database connection pool initialized
+```
+
+### Terminal 2: Frontend (Next.js)
 
 ```bash
 cd frontend
@@ -109,15 +130,35 @@ npm run dev
 1. **Backend Health**: Visit [http://localhost:8000/health](http://localhost:8000/health). Should see `{"status":"healthy"}`.
 2. **API Docs**: Visit [http://localhost:8000/docs](http://localhost:8000/docs) for Swagger UI.
 3. **Frontend Dashboard**: Visit [http://localhost:3000](http://localhost:3000). Create an account at `/signup`.
-4. **Supabase Studio**: Visit [http://localhost:54323](http://localhost:54323) to inspect tables.
+4. **Database**: Check tables with:
+   ```bash
+   docker exec -it auto-bidder-postgres psql -U postgres -d auto_bidder_dev -c "\dt"
+   ```
 
 ---
 
-## 🧪 Core Features to Test
+## 🧪 Test Authentication
 
-### 1. Navigation Context Preservation
+### Sign Up
 
-Apply a filter on the Projects page, navigate away, and return. The filter and scroll position should be preserved.
+1. Go to [http://localhost:3000/signup](http://localhost:3000/signup)
+2. Create account with email and password (min 8 chars)
+3. You'll be automatically logged in and redirected to dashboard
+
+### Verify JWT Token
+
+Open browser DevTools → Application → Local Storage → `auth_token`
+- You should see a JWT token stored
+
+### Test API with Token
+
+```bash
+# Replace YOUR_TOKEN with token from localStorage
+curl -X GET http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
 
 ### 2. Auto-Save & Recovery
 

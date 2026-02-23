@@ -26,13 +26,13 @@ Visual representations of the system architecture.
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      AUTHENTICATION LAYER                           │
-│                       (Supabase Auth)                               │
+│                    (Custom JWT Authentication)                      │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  • Email/Password Auth                                       │  │
-│  │  • OAuth (Google, GitHub)                                    │  │
-│  │  • Session Management                                        │  │
-│  │  • Row Level Security Policies                               │  │
+│  │  • JWT Token Management                                      │  │
+│  │  • Session Tracking                                          │  │
+│  │  • Bcrypt Password Hashing                                   │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
                               │
@@ -56,10 +56,10 @@ Visual representations of the system architecture.
          ▼                     ▼                      │
 ┌──────────────────────────────────────────┐         │
 │        PostgreSQL Database               │         │
-│         (Supabase Postgres)              │         │
+│         (docker-compose)                 │         │
 │                                          │         │
 │  Tables:                                 │         │
-│  ├─ users (auth.users)                  │         │
+│  ├─ users (custom table)                │         │
 │  ├─ projects                             │◄────────┘
 │  ├─ bids                                 │
 │  ├─ keywords                             │
@@ -67,8 +67,8 @@ Visual representations of the system architecture.
 │  ├─ platform_credentials                 │
 │  └─ sources                              │
 │                                          │
-│  RLS Policies: ✅ Enabled                │
-│  Backups: Automated daily               │
+│  Auth: JWT tokens                        │
+│  Backups: Manual or scheduled            │
 └──────────────────────────────────────────┘
                      │
                      │
@@ -117,7 +117,7 @@ Visual representations of the system architecture.
 │                 2. PROJECT STORAGE                          │
 │                                                             │
 │              ┌──────────────────────┐                      │
-│              │  PostgreSQL (Supabase)                      │
+│              │  PostgreSQL (docker-compose)             │
 │              │  • Save project data │                      │
 │              │  • Deduplicate       │                      │
 │              │  • User filtering    │                      │
@@ -197,10 +197,11 @@ Visual representations of the system architecture.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     auth.users (Supabase)                    │
+│                     users (custom table)                     │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  id (UUID, PK)                                         │  │
 │  │  email                                                 │  │
+│  │  password_hash                                         │  │
 │  │  created_at                                            │  │
 │  └────────────────────────────────────────────────────────┘  │
 └─────────────────────┬────────────────────────────────────────┘
@@ -262,24 +263,24 @@ FK = Foreign Key                         │
                       │ 1. Login Request
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Supabase Auth Service                      │
+│             Backend FastAPI Auth Service (/api/auth)       │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  Authentication Methods:                             │  │
-│  │  • Email/Password (password hashing)                 │  │
-│  │  • Magic Link (passwordless)                         │  │
-│  │  • OAuth (Google, GitHub)                            │  │
+│  │  • Email/Password (bcrypt hashing)                   │  │
+│  │  • JWT Tokens (python-jose)                          │  │
+│  │  • 7-day token expiration                            │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                         │                                   │
 │                         │ 2. Generate JWT                   │
 │                         ▼                                   │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │  JWT Token (Signed)                                  │  │
+│  │  JWT Token (Signed with JWT_SECRET)                  │  │
 │  │  {                                                   │  │
 │  │    sub: "user-uuid",                                 │  │
 │  │    email: "user@example.com",                        │  │
-│  │    exp: 3600,                                        │  │
-│  │    aud: "authenticated"                              │  │
+│  │    exp: <timestamp>,                                 │  │
+│  │    iat: <timestamp>                                  │  │
 │  │  }                                                   │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────┬───────────────────────────────────────┘
@@ -289,8 +290,8 @@ FK = Foreign Key                         │
 ┌─────────────────────────────────────────────────────────────┐
 │                    CLIENT (Browser)                         │
 │  Stores JWT in:                                             │
-│  • localStorage (Supabase client handles this)              │
-│  • HTTP-only cookie (secure)                                │
+│  • localStorage (frontend auth client)                      │
+│  • HTTP-only cookie (for middleware)                        │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       │ 4. API Request with JWT
@@ -496,28 +497,27 @@ FK = Foreign Key                         │
            │    │                      │
            ▼    ▼                      ▼
     ┌──────────────────┐      ┌──────────────────┐
-    │   Supabase       │      │  External APIs   │
-    │   (Managed)      │      │                  │
+    │   PostgreSQL     │      │  External APIs   │
+    │   (Database)     │      │                  │
     │                  │      │  • Upwork API    │
     │  • PostgreSQL    │      │  • Freelancer    │
-    │  • Auth Service  │      │  • OpenAI API    │
-    │  • Storage       │      └──────────────────┘
-    │  • Realtime      │
+    │  • ChromaDB      │      │  • OpenAI API    │
+    │  • docker-compose│      └──────────────────┘
     └──────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
 │                     COST BREAKDOWN                               │
 ├──────────────────────────────────────────────────────────────────┤
 │  Vercel Pro:              $20/month                              │
-│  Supabase Pro:            $25/month                              │
+│  PostgreSQL (Neon/AWS):   $20-25/month                           │
 │  Railway (Python):        $20/month (with volume)                │
 │  OpenAI API:              ~$150/month (100 users, caching)       │
 │  Domain:                  $12/year                               │
 │  ────────────────────────────────────────────────────            │
-│  Total:                   ~$215/month                            │
+│  Total:                   ~$210-215/month                        │
 │                                                                  │
 │  Revenue (100 users):     $6,920/month                          │
-│  Net Profit:              $6,705/month ($80,460/year)           │
+│  Net Profit:              $6,705-6,710/month ($80,460/year)     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -551,7 +551,7 @@ FK = Foreign Key                         │
                               │
                               ▼
                     ┌──────────────────┐
-                    │  Supabase        │
+                    │  PostgreSQL      │
                     │  (Read Replicas) │
                     │  + Redis Cache   │
                     └──────────────────┘

@@ -90,34 +90,24 @@ async def check_dependencies() -> DependenciesResponse:
             )
         )
 
-    # Check Supabase connectivity
+    # Check PostgreSQL connectivity
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{settings.supabase_url}/rest/v1/",
-                headers={"apikey": settings.supabase_service_key},
-                timeout=5.0,
-            )
-            if response.status_code == 200:
+        from app.core.database import get_db_pool
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            result = await conn.fetchval("SELECT 1")
+            if result == 1:
                 dependencies.append(
                     DependencyStatus(
-                        name="Supabase",
+                        name="PostgreSQL",
                         status="healthy",
                         message="Connected",
-                    )
-                )
-            else:
-                dependencies.append(
-                    DependencyStatus(
-                        name="Supabase",
-                        status="unhealthy",
-                        message=f"Status code: {response.status_code}",
                     )
                 )
     except Exception as e:
         dependencies.append(
             DependencyStatus(
-                name="Supabase",
+                name="PostgreSQL",
                 status="unhealthy",
                 message=str(e),
             )

@@ -38,7 +38,8 @@ def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
         For development, returns a default user ID if no auth is provided.
         In production, this should require valid JWT and raise 401 if missing.
     """
-    # TODO: Implement proper JWT decoding and validation with Supabase
+    # TODO: Replace placeholder auth with proper JWT dependency
+    # Use: from app.routers.auth import get_current_user
     if not authorization:
         # For development: return default user ID
         # In production, uncomment the raise below

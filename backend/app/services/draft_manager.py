@@ -2,7 +2,7 @@
 Draft Manager Service
 
 Manages draft work operations including CRUD and cleanup.
-Coordinates with Supabase client and conflict resolver for safe operations.
+Uses PostgreSQL connection pool for database operations.
 """
 
 from typing import Optional, List, Dict, Any
@@ -15,7 +15,7 @@ from app.models.draft import (
     DraftUpdate,
     DraftSaveRequest,
 )
-from app.services.supabase_client import supabase_service
+from app.core.database import get_db_pool
 from app.services.conflict_resolver import ConflictResolver
 from app.core.errors import AutoBidderError, ConflictError
 from app.config import settings
@@ -33,7 +33,6 @@ class DraftManager:
     
     def __init__(self) -> None:
         """Initialize draft manager."""
-        self.supabase = supabase_service
         self.conflict_resolver = ConflictResolver()
     
     async def list_drafts(self, user_id: str) -> List[Draft]:
@@ -47,8 +46,20 @@ class DraftManager:
             List of Draft objects
         """
         try:
-            drafts_data = await self.supabase.list_user_drafts(user_id)
-            return [Draft(**draft) for draft in drafts_data]
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, user_id, entity_type, entity_id, draft_data, 
+                           draft_version as version, last_auto_save_at as last_saved_at,
+                           created_at, updated_at
+                    FROM draft_work
+                    WHERE user_id = $1
+                    ORDER BY updated_at DESC
+                    """,
+                    user_id
+                )
+                return [Draft(**dict(row)) for row in rows]
         except Exception as e:
             logger.error(f"Error listing drafts for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to list drafts: {e}")
@@ -71,12 +82,25 @@ class DraftManager:
             Draft object or None if not found
         """
         try:
-            draft_data = await self.supabase.get_draft(user_id, entity_type, entity_id)
-            
-            if not draft_data:
-                return None
-            
-            return Draft(**draft_data)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, user_id, entity_type, entity_id, draft_data, 
+                           draft_version as version, last_auto_save_at as last_saved_at,
+                           created_at, updated_at
+                    FROM draft_work
+                    WHERE user_id = $1 AND entity_type = $2 AND entity_id IS NOT DISTINCT FROM $3
+                    """,
+                    user_id,
+                    entity_type,
+                    entity_id
+                )
+                
+                if not row:
+                    return None
+                
+                return Draft(**dict(row))
         except Exception as e:
             logger.error(f"Error getting draft: {e}")
             raise AutoBidderError(f"Failed to get draft: {e}")
@@ -128,20 +152,34 @@ class DraftManager:
             # Increment version
             new_version = (existing.version + 1) if existing else 1
             
-            # Prepare draft data
-            draft_data: Dict[str, Any] = {
-                "user_id": user_id,
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "draft_data": draft_request.draft_data,
-                "version": new_version,
-                "last_saved_at": datetime.now().isoformat(),
-            }
-            
             # Save to database
-            result = await self.supabase.upsert_draft(draft_data)
-            
-            return Draft(**result)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO draft_work 
+                    (user_id, entity_type, entity_id, draft_data, draft_version, last_auto_save_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (user_id, entity_type, entity_id)
+                    WHERE entity_id IS NOT NULL
+                    DO UPDATE
+                    SET draft_data = EXCLUDED.draft_data,
+                        draft_version = EXCLUDED.draft_version,
+                        last_auto_save_at = EXCLUDED.last_auto_save_at,
+                        updated_at = CURRENT_TIMESTAMP
+                    RETURNING id, user_id, entity_type, entity_id, draft_data, 
+                              draft_version as version, last_auto_save_at as last_saved_at,
+                              created_at, updated_at
+                    """,
+                    user_id,
+                    entity_type,
+                    entity_id,
+                    draft_request.draft_data,
+                    new_version,
+                    datetime.now(),
+                )
+                
+                return Draft(**dict(row))
         except AutoBidderError:
             raise
         except Exception as e:
@@ -163,7 +201,17 @@ class DraftManager:
             entity_id: Entity ID (None for new entities)
         """
         try:
-            await self.supabase.delete_draft(user_id, entity_type, entity_id)
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    DELETE FROM draft_work
+                    WHERE user_id = $1 AND entity_type = $2 AND entity_id IS NOT DISTINCT FROM $3
+                    """,
+                    user_id,
+                    entity_type,
+                    entity_id
+                )
             logger.info(f"Deleted draft for {entity_type}:{entity_id}")
         except Exception as e:
             logger.error(f"Error deleting draft: {e}")
@@ -188,12 +236,19 @@ class DraftManager:
             
             logger.info(f"Starting draft cleanup (retention: {retention_hours}h, cutoff: {cutoff_time})")
             
-            # TODO: Implement cleanup query via Supabase
-            # This would require a custom SQL query or RPC function
-            # For now, log that cleanup would happen here
-            logger.info("Draft cleanup triggered - implementation pending")
-            
-            return 0
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    DELETE FROM draft_work
+                    WHERE updated_at < $1
+                    """,
+                    cutoff_time
+                )
+                # Parse result like "DELETE 5" to get count
+                count = int(result.split()[-1]) if result else 0
+                logger.info(f"Cleaned up {count} expired drafts")
+                return count
         except Exception as e:
             logger.error(f"Error cleaning up expired drafts: {e}")
             return 0

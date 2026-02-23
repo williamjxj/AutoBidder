@@ -7,9 +7,11 @@ Implements API contract from contracts/session-state-api.yaml
 
 from typing import Optional
 import logging
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
 
+from app.routers.auth import get_current_user
+from app.models.auth import UserResponse
 from app.models.session_state import (
     SessionState,
     SessionStateCreate,
@@ -24,56 +26,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
-    """
-    Extract user ID from authorization token.
-    
-    Args:
-        authorization: Authorization header (Bearer token)
-        
-    Returns:
-        User ID extracted from token
-        
-    Raises:
-        HTTPException: If authorization is missing or invalid
-    """
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header required",
-        )
-    
-    # TODO: Implement proper JWT decoding and validation with Supabase
-    # For now, we'll use a placeholder
-    # In production, this should decode the JWT and extract the user_id
-    try:
-        # Placeholder: Extract user_id from token
-        # This should be replaced with proper JWT decoding using supabase-py
-        token = authorization.replace("Bearer ", "")
-        # For development, accept any non-empty token
-        if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authorization token",
-            )
-        
-        # TODO: Replace with actual JWT decoding
-        # from supabase import create_client
-        # supabase = create_client(settings.supabase_url, settings.supabase_service_key)
-        # user = supabase.auth.get_user(token)
-        # return user.id
-        
-        # Placeholder: return dummy user ID for testing
-        # In production, this must be replaced with real JWT verification
-        return "00000000-0000-0000-0000-000000000001"
-    except Exception as e:
-        logger.error(f"Error extracting user ID from token: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization token",
-        )
-
-
 @router.get(
     "/session/state",
     response_model=SessionState,
@@ -82,7 +34,7 @@ def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
     description="Retrieve the current session state for the authenticated user",
 )
 async def get_session_state(
-    authorization: Optional[str] = Header(None),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> SessionState:
     """
     Get user's session state.
@@ -91,7 +43,7 @@ async def get_session_state(
         SessionState object or 404 if not found
     """
     try:
-        user_id = get_user_id_from_token(authorization)
+        user_id = str(current_user.id)
         
         session_state = await session_manager.get_state(user_id)
         
@@ -135,7 +87,7 @@ async def get_session_state(
 )
 async def update_session_state(
     session_update: SessionStateUpdate,
-    authorization: Optional[str] = Header(None),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> SessionState:
     """
     Update user's session state.
@@ -147,7 +99,7 @@ async def update_session_state(
         Updated SessionState object
     """
     try:
-        user_id = get_user_id_from_token(authorization)
+        user_id = str(current_user.id)
         
         # Validate payload size (max 100KB as per spec)
         # FastAPI already validates JSON structure
@@ -186,7 +138,7 @@ async def update_session_state(
     description="Delete session state for the authenticated user",
 )
 async def delete_session_state(
-    authorization: Optional[str] = Header(None),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> None:
     """
     Delete user's session state.
@@ -195,7 +147,7 @@ async def delete_session_state(
         204 No Content on success
     """
     try:
-        user_id = get_user_id_from_token(authorization)
+        user_id = str(current_user.id)
         
         await session_manager.delete_state(user_id)
         

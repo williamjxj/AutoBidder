@@ -2,14 +2,14 @@
 Keyword Service
 
 Service layer for keyword management operations.
-Handles CRUD operations for keywords using Supabase.
+Handles CRUD operations for keywords using PostgreSQL.
 """
 
 from typing import List, Optional
 from datetime import datetime
 import logging
 
-from app.services.supabase_client import supabase_service
+from app.core.database import get_db_pool
 from app.models.keyword import Keyword, KeywordCreate, KeywordUpdate, KeywordStats
 from app.core.errors import AutoBidderError
 
@@ -20,8 +20,8 @@ class KeywordService:
     """Service for managing keywords."""
 
     def __init__(self) -> None:
-        """Initialize keyword service with Supabase client."""
-        self.supabase = supabase_service
+        """Initialize keyword service with PostgreSQL connection pool."""
+        pass
 
     async def list_keywords(
         self,
@@ -46,48 +46,53 @@ class KeywordService:
             AutoBidderError: If query fails
         """
         try:
-            query = (
-                self.supabase.client.table("keywords")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-            )
-
-            if search:
-                query = query.or_(
-                    f"keyword.ilike.%{search}%,description.ilike.%{search}%"
-                )
-
-            if is_active is not None:
-                query = query.eq("is_active", is_active)
-
-            if match_type:
-                query = query.eq("match_type", match_type)
-
-            response = query.execute()
-
-            keywords = []
-            for row in response.data:
-                keywords.append(
-                    Keyword(
-                        id=row["id"],
-                        user_id=row["user_id"],
-                        keyword=row["keyword"],
-                        description=row.get("description"),
-                        is_active=row["is_active"],
-                        match_type=row["match_type"],
-                        jobs_matched=row.get("jobs_matched", 0),
-                        last_match_at=row.get("last_match_at"),
-                        created_at=datetime.fromisoformat(
-                            row["created_at"].replace("Z", "+00:00")
-                        ),
-                        updated_at=datetime.fromisoformat(
-                            row["updated_at"].replace("Z", "+00:00")
-                        ),
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Build dynamic query based on filters
+                query = """
+                    SELECT * FROM keywords
+                    WHERE user_id = $1
+                """
+                params = [user_id]
+                param_count = 1
+                
+                if search:
+                    param_count += 1
+                    query += f" AND (keyword ILIKE ${param_count} OR description ILIKE ${param_count})"
+                    params.append(f"%{search}%")
+                
+                if is_active is not None:
+                    param_count += 1
+                    query += f" AND is_active = ${param_count}"
+                    params.append(is_active)
+                
+                if match_type:
+                    param_count += 1
+                    query += f" AND match_type = ${param_count}"
+                    params.append(match_type)
+                
+                query += " ORDER BY created_at DESC"
+                
+                rows = await conn.fetch(query, *params)
+                
+                keywords = []
+                for row in rows:
+                    keywords.append(
+                        Keyword(
+                            id=str(row["id"]),
+                            user_id=str(row["user_id"]),
+                            keyword=row["keyword"],
+                            description=row.get("description"),
+                            is_active=row["is_active"],
+                            match_type=row["match_type"],
+                            jobs_matched=row.get("jobs_matched", 0),
+                            last_match_at=row.get("last_match_at"),
+                            created_at=row["created_at"],
+                            updated_at=row["updated_at"],
+                        )
                     )
-                )
-
-            return keywords
+                
+                return keywords
         except Exception as e:
             logger.error(f"Error listing keywords for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to list keywords: {e}")
@@ -107,35 +112,32 @@ class KeywordService:
             AutoBidderError: If query fails
         """
         try:
-            response = (
-                self.supabase.client.table("keywords")
-                .select("*")
-                .eq("id", keyword_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-
-            if not response.data:
-                return None
-
-            row = response.data
-            return Keyword(
-                id=row["id"],
-                user_id=row["user_id"],
-                keyword=row["keyword"],
-                description=row.get("description"),
-                is_active=row["is_active"],
-                match_type=row["match_type"],
-                jobs_matched=row.get("jobs_matched", 0),
-                last_match_at=row.get("last_match_at"),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT * FROM keywords
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    keyword_id,
+                    user_id
+                )
+                
+                if not row:
+                    return None
+                
+                return Keyword(
+                    id=str(row["id"]),
+                    user_id=str(row["user_id"]),
+                    keyword=row["keyword"],
+                    description=row.get("description"),
+                    is_active=row["is_active"],
+                    match_type=row["match_type"],
+                    jobs_matched=row.get("jobs_matched", 0),
+                    last_match_at=row.get("last_match_at"),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
         except Exception as e:
             logger.error(f"Error getting keyword {keyword_id}: {e}")
             if "not found" in str(e).lower() or "no rows" in str(e).lower():
@@ -159,55 +161,52 @@ class KeywordService:
             AutoBidderError: If creation fails (e.g., duplicate keyword)
         """
         try:
-            # Check for duplicate keyword (case-insensitive)
-            existing = (
-                self.supabase.client.table("keywords")
-                .select("id")
-                .eq("user_id", user_id)
-                .ilike("keyword", keyword_data.keyword)
-                .execute()
-            )
-
-            if existing.data:
-                raise AutoBidderError(
-                    f"Keyword '{keyword_data.keyword}' already exists for this user"
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Check for duplicate keyword (case-insensitive)
+                existing = await conn.fetchrow(
+                    """
+                    SELECT id FROM keywords
+                    WHERE user_id = $1 AND LOWER(keyword) = LOWER($2)
+                    """,
+                    user_id,
+                    keyword_data.keyword
                 )
-
-            # Insert new keyword
-            response = (
-                self.supabase.client.table("keywords")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "keyword": keyword_data.keyword,
-                        "description": keyword_data.description,
-                        "match_type": keyword_data.match_type,
-                        "is_active": keyword_data.is_active,
-                    }
+                
+                if existing:
+                    raise AutoBidderError(
+                        f"Keyword '{keyword_data.keyword}' already exists for this user"
+                    )
+                
+                # Insert new keyword
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO keywords (user_id, keyword, description, match_type, is_active)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING *
+                    """,
+                    user_id,
+                    keyword_data.keyword,
+                    keyword_data.description,
+                    keyword_data.match_type,
+                    keyword_data.is_active,
                 )
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to create keyword")
-
-            row = response.data[0]
-            return Keyword(
-                id=row["id"],
-                user_id=row["user_id"],
-                keyword=row["keyword"],
-                description=row.get("description"),
-                is_active=row["is_active"],
-                match_type=row["match_type"],
-                jobs_matched=row.get("jobs_matched", 0),
-                last_match_at=row.get("last_match_at"),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+                
+                if not row:
+                    raise AutoBidderError("Failed to create keyword")
+                
+                return Keyword(
+                    id=str(row["id"]),
+                    user_id=str(row["user_id"]),
+                    keyword=row["keyword"],
+                    description=row.get("description"),
+                    is_active=row["is_active"],
+                    match_type=row["match_type"],
+                    jobs_matched=row.get("jobs_matched", 0),
+                    last_match_at=row.get("last_match_at"),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
         except AutoBidderError:
             raise
         except Exception as e:
@@ -236,66 +235,91 @@ class KeywordService:
             existing = await self.get_keyword(keyword_id, user_id)
             if not existing:
                 raise AutoBidderError("Keyword not found")
-
-            # Check for duplicate if keyword text is being changed
-            if keyword_data.keyword and keyword_data.keyword != existing.keyword:
-                duplicate = (
-                    self.supabase.client.table("keywords")
-                    .select("id")
-                    .eq("user_id", user_id)
-                    .ilike("keyword", keyword_data.keyword)
-                    .neq("id", keyword_id)
-                    .execute()
-                )
-
-                if duplicate.data:
-                    raise AutoBidderError(
-                        f"Keyword '{keyword_data.keyword}' already exists for this user"
+            
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Check for duplicate if keyword text is being changed
+                if keyword_data.keyword and keyword_data.keyword != existing.keyword:
+                    duplicate = await conn.fetchrow(
+                        """
+                        SELECT id FROM keywords
+                        WHERE user_id = $1 AND LOWER(keyword) = LOWER($2) AND id != $3
+                        """,
+                        user_id,
+                        keyword_data.keyword,
+                        keyword_id
                     )
-
-            # Build update dict (only include provided fields)
-            update_data = {}
-            if keyword_data.keyword is not None:
-                update_data["keyword"] = keyword_data.keyword
-            if keyword_data.description is not None:
-                update_data["description"] = keyword_data.description
-            if keyword_data.match_type is not None:
-                update_data["match_type"] = keyword_data.match_type
-            if keyword_data.is_active is not None:
-                update_data["is_active"] = keyword_data.is_active
-
-            if not update_data:
-                return existing
-
-            # Update keyword
-            response = (
-                self.supabase.client.table("keywords")
-                .update(update_data)
-                .eq("id", keyword_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to update keyword")
-
-            row = response.data[0]
-            return Keyword(
-                id=row["id"],
-                user_id=row["user_id"],
-                keyword=row["keyword"],
-                description=row.get("description"),
-                is_active=row["is_active"],
-                match_type=row["match_type"],
-                jobs_matched=row.get("jobs_matched", 0),
-                last_match_at=row.get("last_match_at"),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+                    
+                    if duplicate:
+                        raise AutoBidderError(
+                            f"Keyword '{keyword_data.keyword}' already exists for this user"
+                        )
+                
+                # Build update dict (only include provided fields)
+                update_fields = []
+                params = []
+                param_count = 0
+                
+                if keyword_data.keyword is not None:
+                    param_count += 1
+                    update_fields.append(f"keyword = ${param_count}")
+                    params.append(keyword_data.keyword)
+                
+                if keyword_data.description is not None:
+                    param_count += 1
+                    update_fields.append(f"description = ${param_count}")
+                    params.append(keyword_data.description)
+                
+                if keyword_data.match_type is not None:
+                    param_count += 1
+                    update_fields.append(f"match_type = ${param_count}")
+                    params.append(keyword_data.match_type)
+                
+                if keyword_data.is_active is not None:
+                    param_count += 1
+                    update_fields.append(f"is_active = ${param_count}")
+                    params.append(keyword_data.is_active)
+                
+                if not update_fields:
+                    return existing
+                
+                # Add updated_at
+                param_count += 1
+                update_fields.append(f"updated_at = CURRENT_TIMESTAMP")
+                
+                # Add WHERE clause params
+                param_count += 1
+                params.append(keyword_id)
+                keyword_id_param = param_count
+                
+                param_count += 1
+                params.append(user_id)
+                user_id_param = param_count
+                
+                query = f"""
+                    UPDATE keywords
+                    SET {', '.join(update_fields)}
+                    WHERE id = ${keyword_id_param} AND user_id = ${user_id_param}
+                    RETURNING *
+                """
+                
+                row = await conn.fetchrow(query, *params)
+                
+                if not row:
+                    raise AutoBidderError("Failed to update keyword")
+                
+                return Keyword(
+                    id=str(row["id"]),
+                    user_id=str(row["user_id"]),
+                    keyword=row["keyword"],
+                    description=row.get("description"),
+                    is_active=row["is_active"],
+                    match_type=row["match_type"],
+                    jobs_matched=row.get("jobs_matched", 0),
+                    last_match_at=row.get("last_match_at"),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
         except AutoBidderError:
             raise
         except Exception as e:
@@ -318,20 +342,20 @@ class KeywordService:
             existing = await self.get_keyword(keyword_id, user_id)
             if not existing:
                 raise AutoBidderError("Keyword not found")
-
-            # Delete keyword
-            response = (
-                self.supabase.client.table("keywords")
-                .delete()
-                .eq("id", keyword_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to delete keyword")
-
-            logger.info(f"Deleted keyword {keyword_id} for user {user_id}")
+            
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Delete keyword
+                result = await conn.execute(
+                    """
+                    DELETE FROM keywords
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    keyword_id,
+                    user_id
+                )
+                
+                logger.info(f"Deleted keyword {keyword_id} for user {user_id}")
         except AutoBidderError:
             raise
         except Exception as e:

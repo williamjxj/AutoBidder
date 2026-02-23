@@ -7,7 +7,7 @@
 ---
 CREATE TABLE keywords (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- Keyword Data
   keyword VARCHAR(255) NOT NULL,
@@ -34,20 +34,12 @@ CREATE INDEX idx_keywords_keyword_lower ON keywords(LOWER(keyword));
 -- Unique constraint: user can't have duplicate keywords
 CREATE UNIQUE INDEX idx_keywords_user_keyword ON keywords(user_id, LOWER(keyword));
 
--- RLS for keywords
-ALTER TABLE keywords ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own keywords"
-  ON keywords FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
 ---
 --- TABLE: knowledge_base_documents
 ---
 CREATE TABLE knowledge_base_documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- File Information
   filename VARCHAR(500) NOT NULL,
@@ -85,25 +77,17 @@ CREATE INDEX idx_kb_docs_collection ON knowledge_base_documents(collection);
 CREATE INDEX idx_kb_docs_status ON knowledge_base_documents(processing_status);
 CREATE INDEX idx_kb_docs_uploaded_at ON knowledge_base_documents(uploaded_at DESC);
 
--- RLS for knowledge_base_documents
-ALTER TABLE knowledge_base_documents ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own documents"
-  ON knowledge_base_documents FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
 ---
 --- TABLE: platform_credentials
 ---
 CREATE TABLE platform_credentials (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- Platform Information
   platform VARCHAR(50) NOT NULL CHECK (platform IN ('upwork', 'freelancer', 'custom')),
   
-  -- Credentials (Encrypted via Supabase Vault)
+  -- Credentials (Encrypted - implement encryption in application layer)
   api_key TEXT,
   api_secret TEXT,
   access_token TEXT,
@@ -127,20 +111,12 @@ CREATE INDEX idx_platform_credentials_platform ON platform_credentials(platform,
 -- Unique constraint: One credential set per user per platform
 CREATE UNIQUE INDEX idx_platform_credentials_user_platform ON platform_credentials(user_id, platform);
 
--- RLS for platform_credentials
-ALTER TABLE platform_credentials ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own credentials"
-  ON platform_credentials FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
 ---
 --- TABLE: scraping_jobs
 ---
 CREATE TABLE scraping_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   
   -- Job Configuration
   platform VARCHAR(50) NOT NULL,
@@ -167,19 +143,12 @@ CREATE INDEX idx_scraping_jobs_user_id ON scraping_jobs(user_id);
 CREATE INDEX idx_scraping_jobs_status ON scraping_jobs(status);
 CREATE INDEX idx_scraping_jobs_created_at ON scraping_jobs(created_at DESC);
 
--- RLS for scraping_jobs
-ALTER TABLE scraping_jobs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own scraping jobs"
-  ON scraping_jobs FOR SELECT
-  USING (auth.uid() = user_id);
-
 ---
 --- TABLE: analytics_events
 ---
 CREATE TABLE analytics_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   
   -- Event Data
   event_type VARCHAR(100) NOT NULL,
@@ -198,13 +167,6 @@ CREATE TABLE analytics_events (
 CREATE INDEX idx_analytics_events_user_id ON analytics_events(user_id);
 CREATE INDEX idx_analytics_events_type ON analytics_events(event_type);
 CREATE INDEX idx_analytics_events_created_at ON analytics_events(created_at DESC);
-
--- RLS for analytics_events
-ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own events"
-  ON analytics_events FOR SELECT
-  USING (auth.uid() = user_id);
 
 ---
 --- Database Functions: Auto-update timestamps

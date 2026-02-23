@@ -38,7 +38,8 @@ def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
         For development, returns a default user ID if no auth is provided.
         In production, this should require valid JWT and raise 401 if missing.
     """
-    # TODO: Implement proper JWT decoding and validation with Supabase
+    # TODO: Replace placeholder auth with proper JWT dependency
+    # Use: from app.routers.auth import get_current_user
     # For now, using placeholder similar to session router
     if not authorization:
         # For development: return default user ID
@@ -57,12 +58,8 @@ def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
             logger.warning("Empty authorization token, using default user ID for development")
             return "00000000-0000-0000-0000-000000000001"
         
+        # TODO: Replace with FastAPI Depends(get_current_user) from auth router
         # Placeholder: return dummy user ID for testing
-        # In production, this must be replaced with real JWT verification
-        # from supabase import create_client
-        # supabase = create_client(settings.supabase_url, settings.supabase_service_key)
-        # user = supabase.auth.get_user(token)
-        # return user.id
         return "00000000-0000-0000-0000-000000000001"
     except Exception as e:
         logger.error(f"Error extracting user ID from token: {e}")

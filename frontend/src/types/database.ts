@@ -1,5 +1,5 @@
 /**
- * Database Types - Generated from Supabase Schema
+ * Database Types - PostgreSQL Schema
  * These types match the database schema defined in migrations
  */
 

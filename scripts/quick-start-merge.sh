@@ -53,7 +53,7 @@ echo ""
 
 # Step 4: Create migration directories
 echo "📁 Step 4: Creating migration directories..."
-mkdir -p "$BIDMASTER_PRO/supabase/migrations"
+mkdir -p "$BIDMASTER_PRO/database/migrations"
 mkdir -p "$BIDMASTER_PRO/temp/biddinghub-features"
 mkdir -p "$BIDMASTER_PRO/docs/migration"
 echo "✅ Migration directories created"
@@ -71,7 +71,7 @@ echo ""
 
 # Step 6: Create database migration file
 echo "📝 Step 6: Creating database migration template..."
-cat > "$BIDMASTER_PRO/supabase/migrations/003_merge_biddinghub_features.sql" << 'EOF'
+cat > "$BIDMASTER_PRO/database/migrations/003_merge_biddinghub_features.sql" << 'EOF'
 -- BidMaster Pro: Merge BiddingHub Features
 -- Migration Date: 2026-01-12
 -- Description: Add keywords, bidding_strategies, platform_credentials tables
@@ -285,9 +285,8 @@ cat > "$BIDDING_ROOT/python-ai-service/.env.example" << 'EOF'
 # OpenAI
 OPENAI_API_KEY=sk-your-key-here
 
-# Supabase (read-only access)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-key-here
+# PostgreSQL Database
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auto_bidder_dev
 
 # ChromaDB
 CHROMA_PERSIST_DIRECTORY=/app/chroma_db
@@ -361,8 +360,8 @@ cat > "$BIDMASTER_PRO/docs/migration/MIGRATION_NOTES.md" << 'EOF'
 ## Next Steps
 
 1. **Database Migration**:
-   - Review `supabase/migrations/003_merge_biddinghub_features.sql`
-   - Apply migration: Run SQL in Supabase dashboard or use CLI
+   - Review `database/migrations/003_merge_biddinghub_features.sql`
+   - Apply migration: Run SQL in PostgreSQL using psql or a DB client
 
 2. **Backend API Port**:
    - Convert tRPC routers to Next.js API routes
@@ -384,7 +383,7 @@ cat > "$BIDMASTER_PRO/docs/migration/MIGRATION_NOTES.md" << 'EOF'
 
 ## Database Schema Changes
 
-See `supabase/migrations/003_merge_biddinghub_features.sql` for:
+See `database/migrations/003_merge_biddinghub_features.sql` for:
 - New tables: `keywords`, `bidding_strategies`, `platform_credentials`
 - Enhanced columns in `projects` and `bids` tables
 - Row Level Security policies
@@ -402,11 +401,11 @@ echo "📁 Project Location: $BIDMASTER_PRO"
 echo ""
 echo "📋 Next Steps:"
 echo "   1. Review the database migration:"
-echo "      → $BIDMASTER_PRO/supabase/migrations/003_merge_biddinghub_features.sql"
+echo "      → $BIDMASTER_PRO/database/migrations/003_merge_biddinghub_features.sql"
 echo ""
-echo "   2. Apply the migration in Supabase:"
-echo "      → Option A: Copy SQL to Supabase dashboard → SQL Editor → Run"
-echo "      → Option B: Use Supabase CLI: cd $BIDMASTER_PRO && supabase db push"
+echo "   2. Apply the migration in PostgreSQL:"
+echo "      → Option A: Run via docker: docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/003_merge_biddinghub_features.sql"
+echo "      → Option B: Use psql directly: psql -h localhost -U postgres -d auto_bidder_dev -f database/migrations/003_merge_biddinghub_features.sql"
 echo ""
 echo "   3. Review BiddingHub features to port:"
 echo "      → $BIDMASTER_PRO/temp/biddinghub-features/"

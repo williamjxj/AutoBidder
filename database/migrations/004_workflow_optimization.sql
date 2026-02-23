@@ -20,7 +20,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE user_session_states (
   -- Primary Key
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL UNIQUE,
   
   -- Session Context
   active_feature VARCHAR(50), -- 'projects' | 'proposals' | 'keywords' | 'analytics' | 'knowledge-base' | 'settings'
@@ -45,14 +45,6 @@ CREATE TABLE user_session_states (
 CREATE UNIQUE INDEX idx_session_states_user_id ON user_session_states(user_id);
 CREATE INDEX idx_session_states_last_activity ON user_session_states(last_activity_at);
 
--- RLS Policies for user_session_states
-ALTER TABLE user_session_states ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own session state"
-  ON user_session_states FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
 -- Updated Timestamp Trigger for user_session_states
 CREATE TRIGGER update_session_states_updated_at
   BEFORE UPDATE ON user_session_states
@@ -65,7 +57,7 @@ CREATE TRIGGER update_session_states_updated_at
 CREATE TABLE draft_work (
   -- Primary Key
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   
   -- Entity Reference
   entity_type VARCHAR(50) NOT NULL, -- 'proposal' | 'project' | 'keyword' | 'knowledge_document'
@@ -105,14 +97,6 @@ CREATE INDEX idx_draft_work_user_id ON draft_work(user_id);
 CREATE INDEX idx_draft_work_is_recovered ON draft_work(is_recovered) 
   WHERE is_recovered = false;
 
--- RLS Policies for draft_work
-ALTER TABLE draft_work ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own drafts"
-  ON draft_work FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
 -- Updated Timestamp Trigger for draft_work
 CREATE TRIGGER update_draft_work_updated_at
   BEFORE UPDATE ON draft_work
@@ -125,7 +109,7 @@ CREATE TRIGGER update_draft_work_updated_at
 CREATE TABLE workflow_analytics (
   -- Primary Key
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   
   -- Event Data
   event_type VARCHAR(100) NOT NULL, -- 'navigation', 'auto_save', 'draft_recovery', 'offline_sync', etc.
@@ -154,24 +138,6 @@ CREATE INDEX idx_workflow_analytics_user_id ON workflow_analytics(user_id);
 CREATE INDEX idx_workflow_analytics_event_type ON workflow_analytics(event_type);
 CREATE INDEX idx_workflow_analytics_created_at ON workflow_analytics(created_at);
 CREATE INDEX idx_workflow_analytics_category ON workflow_analytics(event_category);
-
--- RLS Policies for workflow_analytics
-ALTER TABLE workflow_analytics ENABLE ROW LEVEL SECURITY;
-
--- Users can only read their own analytics
-CREATE POLICY "Users can read own analytics"
-  ON workflow_analytics FOR SELECT
-  USING (auth.uid() = user_id);
-
--- Service role can insert analytics
-CREATE POLICY "Service can insert analytics"
-  ON workflow_analytics FOR INSERT
-  WITH CHECK (true);
-
--- Grants (Supabase handles this via RLS, but for completeness)
-GRANT ALL ON user_session_states TO authenticated;
-GRANT ALL ON draft_work TO authenticated;
-GRANT SELECT, INSERT ON workflow_analytics TO authenticated;
 
 -- Comments for documentation
 COMMENT ON TABLE user_session_states IS 'Stores user workflow state for context preservation';

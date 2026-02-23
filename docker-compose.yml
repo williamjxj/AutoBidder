@@ -38,8 +38,6 @@ services:
   #     - "8000:8000"
   #   environment:
   #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - SUPABASE_URL=${SUPABASE_URL}
-  #     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
   #     - CHROMA_PERSIST_DIR=/app/chroma_db
   #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auto_bidder_dev
   #     - SESSION_STATE_TTL_HOURS=24
@@ -65,8 +63,6 @@ services:
   #   ports:
   #     - "3000:3000"
   #   environment:
-  #     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-  #     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
   #     - PYTHON_AI_SERVICE_URL=http://backend:8000
   #   depends_on:
   #     - backend

@@ -24,7 +24,6 @@ pip install -r requirements.txt
 
 # Setup environment variables
 cp .env.example .env
-# Edit .env with your OpenAI API key and Supabase credentials
 
 # Run development server
 uvicorn app.main:app --reload --port 8000

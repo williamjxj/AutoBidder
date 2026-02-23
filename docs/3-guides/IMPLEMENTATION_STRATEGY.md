@@ -8,14 +8,14 @@ This document provides a granular, technical walkthrough for merging the `bidmas
 
 ### 1. Unified Next.js Foundation
 
-- **Base**: Standardize on `bidmaster` (Next.js 15, Supabase, Tailwind 4).
-- **Environment**: Create a unified `.env` merging Supabase keys, MySQL connection strings (temporary), and OpenAI/Anthropic API keys.
+- **Base**: Standardize on `bidmaster` (Next.js 15, PostgreSQL via docker-compose, Tailwind 4).
+- **Environment**: Create a unified `.env` with JWT_SECRET, PostgreSQL connection, and OpenAI/Anthropic API keys.
 - **Dependency Audit**: Align versions of React (v19), Shadcn/UI, and TanStack Query.
 
 ### 2. Database Migration & Schema Unification
 
-- **Postgres Migration**: Port MySQL tables (`keywords`, `biddingStrategies`) from `biddingHub` to Supabase.
-- **pgvector Setup**: Enable the `vector` extension in Supabase for future RAG capabilities.
+- **Postgres Migration**: Port MySQL tables (`keywords`, `biddingStrategies`) from `biddingHub` to PostgreSQL.
+- **pgvector Setup**: Enable the `vector` extension in PostgreSQL for RAG capabilities (via docker-compose).
 - **Unified Pipeline Model**:
   - **Projects**: Store scraped job data.
   - **Proposals**: Store AI-generated drafts (formerly `bids` and `applications`).
@@ -47,7 +47,7 @@ This document provides a granular, technical walkthrough for merging the `bidmas
 ### 6. Job Monitor & Alerting
 
 - **Worker**: A background process that triggers every hour.
-- **Matching Engine**: Simple semantic filter (or keyword filter) to push "High Value" jobs to the Next.js UI via Supabase Realtime/Webhooks.
+- **Matching Engine**: Simple semantic filter (or keyword filter) to push "High Value" jobs to the Next.js UI via WebSockets or polling.
 
 ---
 
@@ -56,7 +56,7 @@ This document provides a granular, technical walkthrough for merging the `bidmas
 ### 7. Company Knowledge Ingestion
 
 - **PDF Pipeline**: A Python script to extract text from Case Studies, Resumes, and Portfolios using `PyMuPDF`.
-- **Vectorization**: Generate embeddings (OpenAI `text-embedding-3-small`) and store them in the `knowledge_base` table in Supabase.
+- **Vectorization**: Generate embeddings (OpenAI `text-embedding-3-small`) and store them in ChromaDB via the backend service.
 
 ### 8. Vertical RAG Retrieval Logic
 
@@ -85,10 +85,10 @@ This document provides a granular, technical walkthrough for merging the `bidmas
 ### 11. End-to-End Orchestration
 
 - **Workflow**:
-    1. Scraper finds job -> Supabase.
-    2. Supabase Trigger -> Python FastAPI.
-    3. FastAPI Agent -> Retrieves Context -> Generates Draft -> Supabase.
-    4. Next.js UI -> Realtime update notifies user.
+    1. Scraper finds job -> PostgreSQL.
+    2. Background Job -> Python FastAPI.
+    3. FastAPI Agent -> Retrieves Context -> Generates Draft -> PostgreSQL.
+    4. Next.js UI -> Polling or WebSocket update notifies user.
 
 ### 12. Quality Assurance & Performance
 
@@ -99,4 +99,4 @@ This document provides a granular, technical walkthrough for merging the `bidmas
 ---
 
 > [!TIP]
-> **Why this works**: By separating the "Brain" (Python/FastAPI/RAG) from the "Interface" (Next.js/Supabase), we ensure the UI stays fast while the heavy-duty AI processing happens in a language suited for it.
+> **Why this works**: By separating the "Brain" (Python/FastAPI/RAG) from the "Interface" (Next.js/PostgreSQL), we ensure the UI stays fast while the heavy-duty AI processing happens in a language suited for it.

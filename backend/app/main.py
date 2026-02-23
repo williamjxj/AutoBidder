@@ -4,15 +4,20 @@ FastAPI Main Application - Entry Point
 Configures FastAPI app with CORS, middleware, and routers.
 """
 
+import warnings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
+# Suppress known compatibility warnings
+warnings.filterwarnings("ignore", message=".*trapped.*error reading bcrypt version.*")
+
 from app.config import settings
 from app.core.logging import setup_logging
 from app.core.middleware import TimingMiddleware
-from app.routers import health
+from app.core.database import get_db_pool, close_db_pool
+from app.routers import health, auth
 # Workflow routers
 from app.routers import session, analytics, draft
 # from app.routers import sync  # Will be created for offline sync
@@ -58,6 +63,7 @@ async def global_exception_handler(request, exc: Exception):
 
 
 # Include routers
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(health.router, prefix="/health", tags=["health"])
 
 # Workflow optimization routers
@@ -82,7 +88,13 @@ async def startup_event():
     logger.info("🚀 Auto-Bidder AI Service starting...")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Log Level: {settings.log_level}")
-    logger.info(f"CORS Origins: {settings.cors_origins_list}")
+    
+    # Initialize database pool
+    try:
+        await get_db_pool()
+        logger.info("✅ Database connection pool initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database pool: {e}")
 
 
 # Shutdown event
@@ -90,6 +102,9 @@ async def startup_event():
 async def shutdown_event():
     """Execute on application shutdown."""
     logger.info("🛑 Auto-Bidder AI Service shutting down...")
+    
+    # Close database pool
+    await close_db_pool()
 
 
 # Root endpoint

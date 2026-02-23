@@ -2,6 +2,7 @@
 Document Service - Knowledge Base Management
 
 Handles document upload, processing, and management for the knowledge base.
+Uses PostgreSQL for database and local storage for files.
 """
 
 from typing import Any, Dict, List, Optional
@@ -17,7 +18,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from openai import OpenAI
 
 from app.config import settings
-from app.services.supabase_client import supabase_service
+from app.core.database import get_db_pool
 from app.services.vector_store import vector_store
 from app.core.errors import AutoBidderError, VectorStoreError
 from app.models.document import Document, DocumentCreate, DocumentUpdate, DocumentStats
@@ -55,22 +56,31 @@ class DocumentService:
             AutoBidderError: If query fails
         """
         try:
-            query = supabase_service.client.table("knowledge_base_documents").select("*").eq(
-                "user_id", user_id
-            )
-
-            if collection:
-                query = query.eq("collection", collection)
-            if status:
-                query = query.eq("processing_status", status)
-
-            response = query.order("uploaded_at", desc=True).execute()
-
-            documents = []
-            for row in response.data:
-                documents.append(self._row_to_document(row))
-
-            return documents
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                query = "SELECT * FROM knowledge_base_documents WHERE user_id = $1"
+                params = [user_id]
+                param_count = 1
+                
+                if collection:
+                    param_count += 1
+                    query += f" AND collection = ${param_count}"
+                    params.append(collection)
+                
+                if status:
+                    param_count += 1
+                    query += f" AND processing_status = ${param_count}"
+                    params.append(status)
+                
+                query += " ORDER BY uploaded_at DESC"
+                
+                rows = await conn.fetch(query, *params)
+                
+                documents = []
+                for row in rows:
+                    documents.append(self._row_to_document(dict(row)))
+                
+                return documents
         except Exception as e:
             logger.error(f"Failed to list documents: {e}")
             raise AutoBidderError(f"Failed to list documents: {e}")
@@ -90,18 +100,21 @@ class DocumentService:
             AutoBidderError: If document not found or access denied
         """
         try:
-            response = (
-                supabase_service.client.table("knowledge_base_documents")
-                .select("*")
-                .eq("id", document_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data or len(response.data) == 0:
-                raise AutoBidderError(f"Document {document_id} not found")
-
-            return self._row_to_document(response.data[0])
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT * FROM knowledge_base_documents
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    document_id,
+                    user_id
+                )
+                
+                if not row:
+                    raise AutoBidderError(f"Document {document_id} not found")
+                
+                return self._row_to_document(dict(row))
         except AutoBidderError:
             raise
         except Exception as e:
@@ -148,44 +161,35 @@ class DocumentService:
             # Generate document ID
             document_id = str(uuid.uuid4())
 
-            # Upload to Supabase Storage (if configured)
+            # TODO: Implement file storage (local filesystem or S3)
+            # For now, files are processed in memory
             file_url = None
-            try:
-                # Store in knowledge-base bucket
-                storage_path = f"{user_id}/{document_id}/{filename}"
-                supabase_service.client.storage.from_("knowledge-base").upload(
-                    storage_path, file_content, file_options={"content-type": f"application/{file_type}"}
-                )
-                # Get public URL
-                file_url = supabase_service.client.storage.from_("knowledge-base").get_public_url(
-                    storage_path
-                )
-            except Exception as e:
-                logger.warning(f"Failed to upload to Supabase Storage: {e}")
-                # Continue without storage URL
 
             # Create document record
-            document_data: Dict[str, Any] = {
-                "id": document_id,
-                "user_id": user_id,
-                "filename": filename,
-                "file_type": file_type,
-                "file_size_bytes": file_size,
-                "file_url": file_url,
-                "collection": collection,
-                "processing_status": "pending",
-            }
-
-            response = (
-                supabase_service.client.table("knowledge_base_documents")
-                .insert(document_data)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to create document record")
-
-            document = self._row_to_document(response.data[0])
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO knowledge_base_documents
+                    (id, user_id, filename, file_type, file_size_bytes, file_url, 
+                     collection, processing_status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING *
+                    """,
+                    document_id,
+                    user_id,
+                    filename,
+                    file_type,
+                    file_size,
+                    file_url,
+                    collection,
+                    "pending"
+                )
+                
+                if not row:
+                    raise AutoBidderError("Failed to create document record")
+                
+                document = self._row_to_document(dict(row))
 
             # Process document asynchronously (in background)
             # For now, we'll process it immediately, but in production this should be a background task
@@ -194,7 +198,7 @@ class DocumentService:
             except Exception as e:
                 logger.error(f"Document processing failed: {e}")
                 # Update status to failed
-                await supabase_service.update_document_status(
+                await self._update_document_status(
                     document_id, "failed", str(e)
                 )
 
@@ -220,7 +224,7 @@ class DocumentService:
         """
         try:
             # Update status to processing
-            await supabase_service.update_document_status(document_id, "processing")
+            await self._update_document_status(document_id, "processing")
 
             # Save file to temporary location
             with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}") as tmp_file:
@@ -268,7 +272,7 @@ class DocumentService:
                 )
 
                 # Update document status
-                await supabase_service.update_document_status(
+                await self._update_document_status(
                     document_id,
                     "completed",
                     chunk_count=len(chunks),
@@ -286,6 +290,59 @@ class DocumentService:
         except Exception as e:
             logger.error(f"Document processing error: {e}")
             raise
+
+    async def _update_document_status(
+        self,
+        document_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        chunk_count: Optional[int] = None,
+        token_count: Optional[int] = None,
+    ) -> None:
+        """
+        Update document processing status.
+
+        Args:
+            document_id: Document UUID
+            status: Processing status
+            error_message: Optional error message
+            chunk_count: Optional chunk count
+            token_count: Optional token count
+        """
+        try:
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                update_fields = ["processing_status = $2"]
+                params = [document_id, status]
+                param_count = 2
+                
+                if error_message:
+                    param_count += 1
+                    update_fields.append(f"processing_error = ${param_count}")
+                    params.append(error_message)
+                
+                if chunk_count is not None:
+                    param_count += 1
+                    update_fields.append(f"chunk_count = ${param_count}")
+                    params.append(chunk_count)
+                
+                if token_count is not None:
+                    param_count += 1
+                    update_fields.append(f"token_count = ${param_count}")
+                    params.append(token_count)
+                
+                if status == "completed":
+                    update_fields.append("processed_at = CURRENT_TIMESTAMP")
+                
+                query = f"""
+                    UPDATE knowledge_base_documents
+                    SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                """
+                
+                await conn.execute(query, *params)
+        except Exception as e:
+            logger.error(f"Failed to update document status: {e}")
 
     async def delete_document(self, document_id: str, user_id: str) -> None:
         """
@@ -312,18 +369,19 @@ class DocumentService:
             except VectorStoreError as e:
                 logger.warning(f"Failed to delete from ChromaDB: {e}")
 
-            # Delete from Supabase Storage (if exists)
-            if document.file_url:
-                try:
-                    storage_path = f"{user_id}/{document_id}/{document.filename}"
-                    supabase_service.client.storage.from_("knowledge-base").remove([storage_path])
-                except Exception as e:
-                    logger.warning(f"Failed to delete from storage: {e}")
+            # TODO: Delete from file storage if implemented
 
             # Delete from database
-            supabase_service.client.table("knowledge_base_documents").delete().eq(
-                "id", document_id
-            ).eq("user_id", user_id).execute()
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    DELETE FROM knowledge_base_documents
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    document_id,
+                    user_id
+                )
 
             logger.info(f"Deleted document {document_id}")
         except AutoBidderError:
@@ -346,32 +404,10 @@ class DocumentService:
         try:
             document = await self.get_document(document_id, user_id)
 
-            # Download file from storage
-            if not document.file_url:
-                raise AutoBidderError("Document file not available for reprocessing")
+            # TODO: Implement file retrieval from storage
+            # For now, this is not supported without file storage
+            raise AutoBidderError("Document reprocessing requires file storage (not yet implemented)")
 
-            # Download file content
-            storage_path = f"{user_id}/{document_id}/{document.filename}"
-            file_content = supabase_service.client.storage.from_("knowledge-base").download(
-                storage_path
-            )
-
-            # Delete old embeddings
-            try:
-                await vector_store.delete_document(
-                    collection_name=document.collection,
-                    user_id=user_id,
-                    document_id=document_id,
-                )
-            except VectorStoreError as e:
-                logger.warning(f"Failed to delete old embeddings: {e}")
-
-            # Reprocess
-            await self._process_document(
-                document_id, user_id, file_content, document.file_type, document.collection
-            )
-
-            logger.info(f"Reprocessed document {document_id}")
         except AutoBidderError:
             raise
         except Exception as e:
@@ -412,8 +448,8 @@ class DocumentService:
     def _row_to_document(self, row: Dict[str, Any]) -> Document:
         """Convert database row to Document model."""
         return Document(
-            id=row["id"],
-            user_id=row["user_id"],
+            id=str(row["id"]),
+            user_id=str(row["user_id"]),
             filename=row["filename"],
             file_type=row["file_type"],
             file_size_bytes=row["file_size_bytes"],
@@ -426,15 +462,11 @@ class DocumentService:
             embedding_model=row.get("embedding_model"),
             chroma_collection_name=row.get("chroma_collection_name"),
             retrieval_count=row.get("retrieval_count", 0),
-            last_retrieved_at=datetime.fromisoformat(row["last_retrieved_at"].replace("Z", "+00:00"))
-            if row.get("last_retrieved_at")
-            else None,
-            uploaded_at=datetime.fromisoformat(row["uploaded_at"].replace("Z", "+00:00")),
-            processed_at=datetime.fromisoformat(row["processed_at"].replace("Z", "+00:00"))
-            if row.get("processed_at")
-            else None,
-            created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
+            last_retrieved_at=row.get("last_retrieved_at"),
+            uploaded_at=row["uploaded_at"],
+            processed_at=row.get("processed_at"),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
 

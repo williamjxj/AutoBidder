@@ -1,6 +1,6 @@
 -- Development Seed Data
 -- Purpose: Populate database with test data for local development
--- Note: This assumes a test user exists in auth.users with id '00000000-0000-0000-0000-000000000001'
+-- Note: This assumes a test user exists in users table with id '00000000-0000-0000-0000-000000000001'
 
 -- Clean existing data (optional - uncomment if needed)
 -- TRUNCATE TABLE analytics_events, scraping_jobs, platform_credentials, knowledge_base_documents, keywords, bids, bidding_strategies, projects, user_profiles CASCADE;
@@ -61,11 +61,11 @@ INSERT INTO projects (id, user_id, title, description, budget, budget_type, tech
   (
     '40000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000001',
-    'Build a SaaS dashboard with Next.js and Supabase',
-    'We need an experienced developer to build a modern SaaS dashboard using Next.js 15, React 19, and Supabase. The dashboard should include user authentication, data visualization, and subscription management. Expected timeline: 4-6 weeks.',
+    'Build a SaaS dashboard with Next.js and PostgreSQL',
+    'We need an experienced developer to build a modern SaaS dashboard using Next.js 15, React 19, and PostgreSQL. The dashboard should include user authentication, data visualization, and subscription management. Expected timeline: 4-6 weeks.',
     5000.00,
     'fixed',
-    ARRAY['Next.js', 'React', 'TypeScript', 'Supabase', 'TailwindCSS'],
+    ARRAY['Next.js', 'React', 'TypeScript', 'PostgreSQL', 'TailwindCSS'],
     'upwork',
     'new'
   ),
@@ -178,7 +178,7 @@ INSERT INTO bids (id, project_id, user_id, strategy_id, proposal, status, ai_gen
     '40000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000001',
     '20000000-0000-0000-0000-000000000001',
-    'I am excited to submit my proposal for your Next.js SaaS dashboard project. With over 5 years of experience building production-grade applications with Next.js and Supabase, I am confident I can deliver exactly what you need within your 4-6 week timeline...',
+    'I am excited to submit my proposal for your Next.js SaaS dashboard project. With over 5 years of experience building production-grade applications with Next.js and PostgreSQL, I am confident I can deliver exactly what you need within your 4-6 week timeline...',
     'draft',
     true
   ),

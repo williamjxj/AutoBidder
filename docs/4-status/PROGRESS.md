@@ -34,8 +34,8 @@ The foundational infrastructure for the Auto-Bidder platform is **100% complete*
 
 ✅ **Unified Next.js 15 Foundation** (Tailwind 4, shadcn/ui, TanStack Query)
 ✅ **Python FastAPI AI Service** (LangChain, ChromaDB ready)
-✅ **PostgreSQL Schema** (10 tables, RLS policies, seed data)
-✅ **Authentication Infrastructure** (Supabase Auth)
+✅ **PostgreSQL Schema** (10 tables, custom users, seed data)
+✅ **Authentication Infrastructure** (Custom JWT authentication)
 ✅ **Workflow Optimization MVP** (Auto-save, Navigation Context, Conflict Resolution)
 
 ---
@@ -75,10 +75,10 @@ auto-bidder/
 ├── frontend/             # Next.js 15 + React 19
 │   ├── src/app/          # App Router (Dashboard, Auth, Landing)
 │   ├── src/components/   # Workflow & Shared UI components
-│   └── src/lib/          # Supabase, API clients, Workflow context
+│   └── src/lib/          # Auth client, API clients, Workflow context
 ├── backend/              # Python FastAPI
-│   ├── app/routers/      # Health, Session, Draft, Analytics
-│   ├── app/services/     # Supabase client, Vector store, Draft manager
+│   ├── app/routers/      # Health, Session, Draft, Analytics, Auth
+│   ├── app/services/     # Auth service, Vector store, Draft manager
 │   └── app/core/         # Logging, Cache, Exceptions
 ├── database/             # SQL Migrations & Seed data
 └── docs/                 # Documentation (Merged & Refactored)

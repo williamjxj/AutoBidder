@@ -35,6 +35,11 @@ export default function SignupPage() {
       return
     }
 
+    if (password.length > 72) {
+      setError('Password must not exceed 72 characters')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -101,9 +106,10 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="••••••••"
+                maxLength={72}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Must be at least 8 characters
+                Must be 8-72 characters
               </p>
             </div>
 
@@ -121,6 +127,7 @@ export default function SignupPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="••••••••"
+                maxLength={72}
               />
             </div>
 

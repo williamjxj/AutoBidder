@@ -2,7 +2,7 @@
 Strategy Service
 
 Service layer for bidding strategy management operations.
-Handles CRUD operations for strategies using Supabase.
+Handles CRUD operations for strategies using PostgreSQL.
 """
 
 from typing import List, Optional
@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 import logging
 
-from app.services.supabase_client import supabase_service
+from app.core.database import get_db_pool
 from app.models.strategy import Strategy, StrategyCreate, StrategyUpdate, TestProposal
 from app.core.errors import AutoBidderError
 
@@ -21,8 +21,8 @@ class StrategyService:
     """Service for managing bidding strategies."""
 
     def __init__(self) -> None:
-        """Initialize strategy service with Supabase client."""
-        self.supabase = supabase_service
+        """Initialize strategy service with PostgreSQL connection pool."""
+        pass
 
     async def list_strategies(self, user_id: str) -> List[Strategy]:
         """
@@ -38,40 +38,22 @@ class StrategyService:
             AutoBidderError: If query fails
         """
         try:
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("is_default", desc=True)
-                .order("created_at", desc=True)
-                .execute()
-            )
-
-            strategies = []
-            for row in response.data:
-                strategies.append(
-                    Strategy(
-                        id=row["id"],
-                        user_id=row["user_id"],
-                        name=row["name"],
-                        description=row.get("description"),
-                        system_prompt=row["system_prompt"],
-                        tone=row["tone"],
-                        focus_areas=row.get("focus_areas", []),
-                        temperature=Decimal(str(row["temperature"])),
-                        max_tokens=row["max_tokens"],
-                        is_default=row["is_default"],
-                        use_count=row.get("use_count", 0),
-                        created_at=datetime.fromisoformat(
-                            row["created_at"].replace("Z", "+00:00")
-                        ),
-                        updated_at=datetime.fromisoformat(
-                            row["updated_at"].replace("Z", "+00:00")
-                        ),
-                    )
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM bidding_strategies
+                    WHERE user_id = $1
+                    ORDER BY is_default DESC, created_at DESC
+                    """,
+                    user_id
                 )
-
-            return strategies
+                
+                strategies = []
+                for row in rows:
+                    strategies.append(self._row_to_strategy(row))
+                
+                return strategies
         except Exception as e:
             logger.error(f"Error listing strategies for user {user_id}: {e}")
             raise AutoBidderError(f"Failed to list strategies: {e}")
@@ -93,38 +75,21 @@ class StrategyService:
             AutoBidderError: If query fails
         """
         try:
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .select("*")
-                .eq("id", strategy_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-
-            if not response.data:
-                return None
-
-            row = response.data
-            return Strategy(
-                id=row["id"],
-                user_id=row["user_id"],
-                name=row["name"],
-                description=row.get("description"),
-                system_prompt=row["system_prompt"],
-                tone=row["tone"],
-                focus_areas=row.get("focus_areas", []),
-                temperature=Decimal(str(row["temperature"])),
-                max_tokens=row["max_tokens"],
-                is_default=row["is_default"],
-                use_count=row.get("use_count", 0),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT * FROM bidding_strategies
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    strategy_id,
+                    user_id
+                )
+                
+                if not row:
+                    return None
+                
+                return self._row_to_strategy(row)
         except Exception as e:
             logger.error(f"Error getting strategy {strategy_id}: {e}")
             if "not found" in str(e).lower() or "no rows" in str(e).lower():
@@ -148,66 +113,51 @@ class StrategyService:
             AutoBidderError: If creation fails (e.g., duplicate name)
         """
         try:
-            # Check for duplicate name (case-insensitive)
-            existing = (
-                self.supabase.client.table("bidding_strategies")
-                .select("id")
-                .eq("user_id", user_id)
-                .ilike("name", strategy_data.name)
-                .execute()
-            )
-
-            if existing.data:
-                raise AutoBidderError(
-                    f"Strategy '{strategy_data.name}' already exists for this user"
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Check for duplicate name (case-insensitive)
+                existing = await conn.fetchrow(
+                    """
+                    SELECT id FROM bidding_strategies
+                    WHERE user_id = $1 AND LOWER(name) = LOWER($2)
+                    """,
+                    user_id,
+                    strategy_data.name
                 )
-
-            # If setting as default, unmark other defaults
-            if strategy_data.is_default:
-                await self._unmark_other_defaults(user_id)
-
-            # Insert new strategy
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "name": strategy_data.name,
-                        "description": strategy_data.description,
-                        "system_prompt": strategy_data.system_prompt,
-                        "tone": strategy_data.tone,
-                        "focus_areas": strategy_data.focus_areas,
-                        "temperature": float(strategy_data.temperature),
-                        "max_tokens": strategy_data.max_tokens,
-                        "is_default": strategy_data.is_default,
-                    }
+                
+                if existing:
+                    raise AutoBidderError(
+                        f"Strategy '{strategy_data.name}' already exists for this user"
+                    )
+                
+                # If setting as default, unmark other defaults
+                if strategy_data.is_default:
+                    await self._unmark_other_defaults(user_id)
+                
+                # Insert new strategy
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO bidding_strategies 
+                    (user_id, name, description, system_prompt, tone, focus_areas, 
+                     temperature, max_tokens, is_default)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    RETURNING *
+                    """,
+                    user_id,
+                    strategy_data.name,
+                    strategy_data.description,
+                    strategy_data.system_prompt,
+                    strategy_data.tone,
+                    strategy_data.focus_areas,
+                    float(strategy_data.temperature),
+                    strategy_data.max_tokens,
+                    strategy_data.is_default,
                 )
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to create strategy")
-
-            row = response.data[0]
-            return Strategy(
-                id=row["id"],
-                user_id=row["user_id"],
-                name=row["name"],
-                description=row.get("description"),
-                system_prompt=row["system_prompt"],
-                tone=row["tone"],
-                focus_areas=row.get("focus_areas", []),
-                temperature=Decimal(str(row["temperature"])),
-                max_tokens=row["max_tokens"],
-                is_default=row["is_default"],
-                use_count=row.get("use_count", 0),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+                
+                if not row:
+                    raise AutoBidderError("Failed to create strategy")
+                
+                return self._row_to_strategy(row)
         except AutoBidderError:
             raise
         except Exception as e:
@@ -236,75 +186,94 @@ class StrategyService:
             existing = await self.get_strategy(strategy_id, user_id)
             if not existing:
                 raise AutoBidderError("Strategy not found")
-
-            # Check for duplicate if name is being changed
-            if strategy_data.name and strategy_data.name != existing.name:
-                duplicate = (
-                    self.supabase.client.table("bidding_strategies")
-                    .select("id")
-                    .eq("user_id", user_id)
-                    .ilike("name", strategy_data.name)
-                    .neq("id", strategy_id)
-                    .execute()
-                )
-
-                if duplicate.data:
-                    raise AutoBidderError(
-                        f"Strategy '{strategy_data.name}' already exists for this user"
+            
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Check for duplicate if name is being changed
+                if strategy_data.name and strategy_data.name != existing.name:
+                    duplicate = await conn.fetchrow(
+                        """
+                        SELECT id FROM bidding_strategies
+                        WHERE user_id = $1 AND LOWER(name) = LOWER($2) AND id != $3
+                        """,
+                        user_id,
+                        strategy_data.name,
+                        strategy_id
                     )
-
-            # Build update dict (only include provided fields)
-            update_data = {}
-            if strategy_data.name is not None:
-                update_data["name"] = strategy_data.name
-            if strategy_data.description is not None:
-                update_data["description"] = strategy_data.description
-            if strategy_data.system_prompt is not None:
-                update_data["system_prompt"] = strategy_data.system_prompt
-            if strategy_data.tone is not None:
-                update_data["tone"] = strategy_data.tone
-            if strategy_data.focus_areas is not None:
-                update_data["focus_areas"] = strategy_data.focus_areas
-            if strategy_data.temperature is not None:
-                update_data["temperature"] = float(str(strategy_data.temperature))
-            if strategy_data.max_tokens is not None:
-                update_data["max_tokens"] = strategy_data.max_tokens
-
-            if not update_data:
-                return existing
-
-            # Update strategy
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .update(update_data)
-                .eq("id", strategy_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to update strategy")
-
-            row = response.data[0]
-            return Strategy(
-                id=row["id"],
-                user_id=row["user_id"],
-                name=row["name"],
-                description=row.get("description"),
-                system_prompt=row["system_prompt"],
-                tone=row["tone"],
-                focus_areas=row.get("focus_areas", []),
-                temperature=Decimal(str(row["temperature"])),
-                max_tokens=row["max_tokens"],
-                is_default=row["is_default"],
-                use_count=row.get("use_count", 0),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+                    
+                    if duplicate:
+                        raise AutoBidderError(
+                            f"Strategy '{strategy_data.name}' already exists for this user"
+                        )
+                
+                # Build update query dynamically
+                update_fields = []
+                params = []
+                param_count = 0
+                
+                if strategy_data.name is not None:
+                    param_count += 1
+                    update_fields.append(f"name = ${param_count}")
+                    params.append(strategy_data.name)
+                
+                if strategy_data.description is not None:
+                    param_count += 1
+                    update_fields.append(f"description = ${param_count}")
+                    params.append(strategy_data.description)
+                
+                if strategy_data.system_prompt is not None:
+                    param_count += 1
+                    update_fields.append(f"system_prompt = ${param_count}")
+                    params.append(strategy_data.system_prompt)
+                
+                if strategy_data.tone is not None:
+                    param_count += 1
+                    update_fields.append(f"tone = ${param_count}")
+                    params.append(strategy_data.tone)
+                
+                if strategy_data.focus_areas is not None:
+                    param_count += 1
+                    update_fields.append(f"focus_areas = ${param_count}")
+                    params.append(strategy_data.focus_areas)
+                
+                if strategy_data.temperature is not None:
+                    param_count += 1
+                    update_fields.append(f"temperature = ${param_count}")
+                    params.append(float(str(strategy_data.temperature)))
+                
+                if strategy_data.max_tokens is not None:
+                    param_count += 1
+                    update_fields.append(f"max_tokens = ${param_count}")
+                    params.append(strategy_data.max_tokens)
+                
+                if not update_fields:
+                    return existing
+                
+                # Add updated_at
+                update_fields.append("updated_at = CURRENT_TIMESTAMP")
+                
+                # Add WHERE clause params
+                param_count += 1
+                params.append(strategy_id)
+                strategy_id_param = param_count
+                
+                param_count += 1
+                params.append(user_id)
+                user_id_param = param_count
+                
+                query = f"""
+                    UPDATE bidding_strategies
+                    SET {', '.join(update_fields)}
+                    WHERE id = ${strategy_id_param} AND user_id = ${user_id_param}
+                    RETURNING *
+                """
+                
+                row = await conn.fetchrow(query, *params)
+                
+                if not row:
+                    raise AutoBidderError("Failed to update strategy")
+                
+                return self._row_to_strategy(row)
         except AutoBidderError:
             raise
         except Exception as e:
@@ -327,20 +296,19 @@ class StrategyService:
             existing = await self.get_strategy(strategy_id, user_id)
             if not existing:
                 raise AutoBidderError("Strategy not found")
-
-            # Delete strategy
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .delete()
-                .eq("id", strategy_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to delete strategy")
-
-            logger.info(f"Deleted strategy {strategy_id} for user {user_id}")
+            
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    DELETE FROM bidding_strategies
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    strategy_id,
+                    user_id
+                )
+                
+                logger.info(f"Deleted strategy {strategy_id} for user {user_id}")
         except AutoBidderError:
             raise
         except Exception as e:
@@ -368,42 +336,28 @@ class StrategyService:
             existing = await self.get_strategy(strategy_id, user_id)
             if not existing:
                 raise AutoBidderError("Strategy not found")
-
+            
             # Unmark all other defaults
             await self._unmark_other_defaults(user_id)
-
-            # Set this strategy as default
-            response = (
-                self.supabase.client.table("bidding_strategies")
-                .update({"is_default": True})
-                .eq("id", strategy_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not response.data:
-                raise AutoBidderError("Failed to set default strategy")
-
-            row = response.data[0]
-            return Strategy(
-                id=row["id"],
-                user_id=row["user_id"],
-                name=row["name"],
-                description=row.get("description"),
-                system_prompt=row["system_prompt"],
-                tone=row["tone"],
-                focus_areas=row.get("focus_areas", []),
-                temperature=Decimal(str(row["temperature"])),
-                max_tokens=row["max_tokens"],
-                is_default=row["is_default"],
-                use_count=row.get("use_count", 0),
-                created_at=datetime.fromisoformat(
-                    row["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    row["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+            
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                # Set this strategy as default
+                row = await conn.fetchrow(
+                    """
+                    UPDATE bidding_strategies
+                    SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1 AND user_id = $2
+                    RETURNING *
+                    """,
+                    strategy_id,
+                    user_id
+                )
+                
+                if not row:
+                    raise AutoBidderError("Failed to set default strategy")
+                
+                return self._row_to_strategy(row)
         except AutoBidderError:
             raise
         except Exception as e:
@@ -413,9 +367,16 @@ class StrategyService:
     async def _unmark_other_defaults(self, user_id: str) -> None:
         """Unmark all default strategies for a user."""
         try:
-            self.supabase.client.table("bidding_strategies").update(
-                {"is_default": False}
-            ).eq("user_id", user_id).eq("is_default", True).execute()
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE bidding_strategies
+                    SET is_default = FALSE, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = $1 AND is_default = TRUE
+                    """,
+                    user_id
+                )
         except Exception as e:
             logger.error(f"Error unmarking other defaults: {e}")
             raise AutoBidderError(f"Failed to unmark other defaults: {e}")
@@ -454,19 +415,21 @@ class StrategyService:
             )
 
             # Placeholder proposal text
+            focus_areas_str = ', '.join(strategy.focus_areas) if strategy.focus_areas else 'None'
+            
             proposal_text = f"""
-            [Sample Proposal Generated with Strategy: {strategy.name}]
-            
-            Based on the job description: {sample_job}
-            
-            This is a test proposal generated using the "{strategy.name}" strategy.
-            In production, this would be generated by the AI proposal service.
-            
-            Strategy Configuration:
-            - Tone: {strategy.tone}
-            - Temperature: {strategy.temperature}
-            - Max Tokens: {strategy.max_tokens}
-            - Focus Areas: {strategy.focus_areas.join(', ') if strategy.focus_areas else 'None'}
+[Sample Proposal Generated with Strategy: {strategy.name}]
+
+Based on the job description: {sample_job}
+
+This is a test proposal generated using the "{strategy.name}" strategy.
+In production, this would be generated by the AI proposal service.
+
+Strategy Configuration:
+- Tone: {strategy.tone}
+- Temperature: {strategy.temperature}
+- Max Tokens: {strategy.max_tokens}
+- Focus Areas: {focus_areas_str}
             """
 
             return TestProposal(proposal=proposal_text.strip(), test_mode=True)
@@ -475,6 +438,24 @@ class StrategyService:
         except Exception as e:
             logger.error(f"Error testing strategy {strategy_id}: {e}")
             raise AutoBidderError(f"Failed to test strategy: {e}")
+
+    def _row_to_strategy(self, row) -> Strategy:
+        """Convert database row to Strategy model."""
+        return Strategy(
+            id=str(row["id"]),
+            user_id=str(row["user_id"]),
+            name=row["name"],
+            description=row.get("description"),
+            system_prompt=row["system_prompt"],
+            tone=row["tone"],
+            focus_areas=row.get("focus_areas", []),
+            temperature=Decimal(str(row["temperature"])),
+            max_tokens=row["max_tokens"],
+            is_default=row["is_default"],
+            use_count=row.get("use_count", 0),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
 
 # Singleton instance

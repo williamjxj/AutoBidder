@@ -2,96 +2,149 @@
  * useAuth Hook - Authentication Management
  * 
  * Provides authentication state and methods for login, logout, signup, and session management.
+ * Uses custom backend API with JWT tokens.
  */
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import type { User, Session, AuthError } from '@supabase/supabase-js'
+import { authAPI, type User } from '@/lib/auth/client'
+
+interface AuthError {
+  message: string
+}
 
 interface UseAuthReturn {
   user: User | null
-  session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>
+  signUp: (email: string, password: string, fullName?: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
 }
 
+const TOKEN_KEY = 'auth_token'
+
+// Helper to set cookie (for middleware to read)
+function setAuthCookie(token: string) {
+  if (typeof document !== 'undefined') {
+    document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+  }
+}
+
+// Helper to remove cookie
+function removeAuthCookie() {
+  if (typeof document !== 'undefined') {
+    document.cookie = 'auth_token=; path=/; max-age=0'
+  }
+}
+
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+
+  // Load user from token on mount
+  const loadUser = useCallback(async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY)
+      
+      if (!token) {
+        setLoading(false)
+        return
+      }
+
+      const userData = await authAPI.getCurrentUser(token)
+      setUser(userData)
+    } catch (error) {
+      // Token is invalid or expired, remove it
+      localStorage.removeItem(TOKEN_KEY)
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase.auth])
+    loadUser()
+  }, [loadUser])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (!error) {
+    try {
+      const response = await authAPI.login(email, password)
+      
+      // Store token in localStorage and cookie
+      localStorage.setItem(TOKEN_KEY, response.access_token)
+      setAuthCookie(response.access_token)
+      
+      // Set user
+      setUser(response.user)
+      
+      // Redirect to dashboard
       router.push('/dashboard')
       router.refresh()
+      
+      return { error: null }
+    } catch (error) {
+      return { 
+        error: { 
+          message: error instanceof Error ? error.message : 'Login failed' 
+        } 
+      }
     }
-
-    return { error }
   }
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-
-    if (!error) {
-      // Redirect to email confirmation page or dashboard
+  const signUp = async (email: string, password: string, fullName?: string) => {
+    try {
+      const response = await authAPI.signup(email, password, fullName)
+      
+      // Store token in localStorage and cookie
+      localStorage.setItem(TOKEN_KEY, response.access_token)
+      setAuthCookie(response.access_token)
+      
+      // Set user
+      setUser(response.user)
+      
+      // Redirect to dashboard
       router.push('/dashboard')
       router.refresh()
+      
+      return { error: null }
+    } catch (error) {
+      return { 
+        error: { 
+          message: error instanceof Error ? error.message : 'Signup failed' 
+        } 
+      }
     }
-
-    return { error }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    try {
+      const token = localStorage.getItem(TOKEN_KEY)
+      
+      if (token) {
+        await authAPI.logout(token)
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      // Always clear local state
+      localStorage.removeItem(TOKEN_KEY)
+      removeAuthCookie()
+      setUser(null)
+      router.push('/login')
+      router.refresh()
+    }
   }
 
   const refreshSession = async () => {
-    const { data: { session } } = await supabase.auth.refreshSession()
-    setSession(session)
-    setUser(session?.user ?? null)
+    await loadUser()
   }
 
   return {
     user,
-    session,
     loading,
     signIn,
     signUp,

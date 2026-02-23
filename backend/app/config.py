@@ -40,9 +40,10 @@ class Settings(BaseSettings):
     )
     deepseek_max_tokens: int = Field(default=4096, alias="DEEPSEEK_MAX_TOKENS")
 
-    # Supabase Configuration
-    supabase_url: str = Field(..., alias="SUPABASE_URL")
-    supabase_service_key: str = Field(..., alias="SUPABASE_KEY")
+    # JWT Authentication
+    jwt_secret: str = Field(default="your-secret-key-change-in-production", alias="JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_expiration_minutes: int = Field(default=10080, alias="JWT_EXPIRATION_MINUTES")  # 7 days
 
     # Database and Storage Configuration
     database_url: Optional[str] = Field(None, alias="DATABASE_URL")

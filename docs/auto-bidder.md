@@ -9,9 +9,10 @@ The **Auto-Bidder Platform** is a sophisticated full-stack application designed 
 - **Frontend**: Built with **Next.js 15 (App Router)** and **React 19**. It features a modern design system using **TailwindCSS 4** and **shadcn/ui**. Server state management is handled by **TanStack Query**.
 - **Backend**: A **Python FastAPI** service. It serves as the "brain," managing AI logic, vector embeddings, and data orchestration.
 - **Database**:
-  - **Relational**: PostgreSQL (via Supabase) for user sessions, analytical data, and metadata.
+  - **Relational**: PostgreSQL (via docker-compose) for users, sessions, and metadata.
   - **Vector**: **ChromaDB** for storing and retrieving document embeddings to support RAG workflows.
-- **AI/LLM**: Integrates with **OpenAI (GPT-4-turbo)** for high-quality proposal drafting and **LangChain** for document chunking and retrieval logic.
+- **Authentication**: Custom JWT-based authentication with bcrypt password hashing.
+- **AI/LLM**: Integrates with **OpenAI (GPT-4-turbo)** or **DeepSeek** for high-quality proposal drafting and **LangChain** for document chunking and retrieval logic.
 
 ### Core Logic Analysis
 
@@ -84,7 +85,7 @@ graph TD
     C --> D[Retrieve Relevant Context from Vector DB]
     C --> E[Fetch Bidding Strategy Template]
     D & E --> F[Generate AI Draft]
-    F --> G[Draft Saved to Supabase]
+    F --> G[Draft Saved to PostgreSQL]
     G --> H[User Review & Edit]
     H --> I[Final Submission]
 ```
