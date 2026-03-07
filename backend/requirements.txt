@@ -45,6 +45,9 @@ pandas>=2.0.0
 # ETL Scheduler (003-projects-etl-persistence)
 apscheduler>=3.10.0
 
+# Notifications (004-improve-autonomous)
+sendgrid>=6.11.0
+
 # Utilities
 python-dotenv==1.0.1
 httpx>=0.24.0,<0.28.0

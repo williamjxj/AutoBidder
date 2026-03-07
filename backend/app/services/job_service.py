@@ -190,7 +190,8 @@ async def list_jobs(
         "j.employer_name, j.etl_source, j.posted_at, j.status"
     )
     if user_id is not None:
-        select_cols += ", ujs.status AS user_status"
+        select_cols += ", ujs.status AS user_status, ujq.qualification_score, ujq.qualification_reason"
+        join_clause += " LEFT JOIN user_job_qualifications ujq ON ujq.job_id = j.id AND ujq.user_id = $1::uuid"
 
     count_sql = f"SELECT COUNT(*)::int FROM jobs j{join_clause} WHERE {where_clause}"
     total = await pool.fetchval(count_sql, *params)
@@ -207,18 +208,27 @@ async def list_jobs(
     """
     rows = await pool.fetch(list_sql, *params)
 
-    jobs = [_row_to_job_dict(r, use_user_status=user_id is not None) for r in rows]
+    jobs = [
+        _row_to_job_dict(
+            r,
+            use_user_status=user_id is not None,
+            include_qualification=user_id is not None,
+        )
+        for r in rows
+    ]
     return jobs, total
 
 
-def _row_to_job_dict(row: Any, use_user_status: bool = False) -> Dict[str, Any]:
+def _row_to_job_dict(
+    row: Any, use_user_status: bool = False, include_qualification: bool = False
+) -> Dict[str, Any]:
     """Convert DB row to API response shape. When use_user_status, prefer user_status over job status."""
     status = "new"
     if use_user_status and row.get("user_status"):
         status = row["user_status"]
     elif row.get("status"):
         status = row["status"]
-    return {
+    d: Dict[str, Any] = {
         "id": str(row["id"]),
         "external_id": row.get("external_id"),
         "title": row["title"],
@@ -234,6 +244,10 @@ def _row_to_job_dict(row: Any, use_user_status: bool = False) -> Dict[str, Any]:
         "posted_at": row.get("posted_at").isoformat() if row.get("posted_at") else None,
         "source": row.get("etl_source"),
     }
+    if include_qualification and row.get("qualification_score") is not None:
+        d["qualification_score"] = float(row["qualification_score"])
+        d["qualification_reason"] = row.get("qualification_reason")
+    return d
 
 
 async def get_stats() -> Dict[str, Any]:

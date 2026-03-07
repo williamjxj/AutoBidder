@@ -73,7 +73,9 @@ app.include_router(draft.router, prefix="/api", tags=["drafts"])
 # UI Routers Improvement
 from app.routers import keywords, strategies, knowledge_base, proposals, projects, etl
 from app.routers import settings as settings_router
+from app.routers import autonomous
 app.include_router(keywords.router, prefix="/api", tags=["keywords"])
+app.include_router(autonomous.router, prefix="/api", tags=["autonomous"])
 app.include_router(strategies.router, prefix="/api", tags=["strategies"])
 app.include_router(knowledge_base.router, prefix="/api", tags=["knowledge-base"])
 app.include_router(projects.router, tags=["projects"])

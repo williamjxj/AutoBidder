@@ -77,7 +77,16 @@ class Proposal(ProposalBase):
     # Timestamps
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    
+
+    # Auto-generation (004-improve-autonomous, FR-008)
+    source: Optional[str] = Field(None, description="manual or auto_generated")
+    auto_generated_at: Optional[datetime] = Field(None, description="When auto-generated")
+
+    # Quality feedback (004-improve-autonomous, FR-009)
+    quality_score: Optional[int] = Field(None, description="0-100 overall quality")
+    quality_breakdown: Optional[dict] = Field(None, description="Dimension scores")
+    quality_suggestions: Optional[List[str]] = Field(None, description="Improvement suggestions")
+
     class Config:
         """Pydantic config."""
         from_attributes = True
@@ -90,6 +99,15 @@ class ProposalListResponse(BaseModel):
     total: int
     page: int = 1
     page_size: int = 50
+
+
+class ProposalQuality(BaseModel):
+    """Quality score and suggestions for a proposal (T033, FR-009)."""
+
+    overall_score: Optional[int] = Field(None, description="0-100 overall quality")
+    dimension_scores: Optional[dict] = Field(None, description="Scores per dimension")
+    suggestions: Optional[List[str]] = Field(None, description="Improvement suggestions")
+    word_count: Optional[int] = Field(None, description="Proposal word count")
 
 
 class ProposalSubmitRequest(BaseModel):

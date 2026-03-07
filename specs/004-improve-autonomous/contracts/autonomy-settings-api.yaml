@@ -1,0 +1,183 @@
+# API Contract: Autonomy Settings (004-improve-autonomous)
+# User-configurable autonomy preferences (FR-002, FR-004, FR-006, FR-007, FR-010)
+# Canonical path: /api/autonomous/settings (aligned with autonomous-api.yaml and implementation)
+
+openapi: 3.0.3
+info:
+  title: Auto-Bidder Autonomy Settings API
+  version: 1.0.0
+  description: Autonomy preferences for auto-discovery, qualification, notifications, and auto-generation
+
+paths:
+  /api/autonomous/settings:
+    get:
+      summary: Get autonomy settings (FR-010, FR-011)
+      operationId: getAutonomySettings
+      tags: [settings, autonomy]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Autonomy settings for current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutonomySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Update autonomy settings (FR-002, FR-004, FR-006, FR-007, FR-010)
+      operationId: updateAutonomySettings
+      tags: [settings, autonomy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutonomySettingsUpdate'
+      responses:
+        '200':
+          description: Updated autonomy settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutonomySettings'
+        '400':
+          description: Invalid input (e.g., threshold out of range)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/autonomous/status:
+    get:
+      summary: Get autonomous pipeline status (last run, counts)
+      operationId: getAutonomyStatus
+      tags: [settings, autonomy]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pipeline status and recent run stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutonomyStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    AutonomySettings:
+      type: object
+      required:
+        - auto_discovery_enabled
+        - autonomy_level
+      properties:
+        auto_discovery_enabled:
+          type: boolean
+          description: Whether background job discovery runs for this user
+        discovery_interval_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+          default: 15
+          description: Minutes between discovery runs
+        qualification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.6
+          description: Min score (0-1) for job to appear as qualified
+        notifications_enabled:
+          type: boolean
+          description: Send email when high-quality jobs found
+        notification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.8
+          description: Min score to trigger notification
+        auto_generate_enabled:
+          type: boolean
+          description: Auto-generate proposals for high-confidence jobs
+        auto_generate_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.85
+          description: Min score to auto-generate proposal
+        autonomy_level:
+          type: string
+          enum: [discovery_only, semi_autonomous, full_auto_generate]
+          description: |
+            discovery_only: discovery only, no qualification/auto-gen
+            semi_autonomous: discovery + qualification + optional auto-gen
+            full_auto_generate: discovery + qualification + auto-gen for high scores
+
+    AutonomySettingsUpdate:
+      type: object
+      properties:
+        auto_discovery_enabled:
+          type: boolean
+        discovery_interval_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+        qualification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        notifications_enabled:
+          type: boolean
+        notification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        auto_generate_enabled:
+          type: boolean
+        auto_generate_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        autonomy_level:
+          type: string
+          enum: [discovery_only, semi_autonomous, full_auto_generate]
+
+    AutonomyStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, paused, not_configured]
+        last_run_at:
+          type: string
+          format: date-time
+          nullable: true
+        stats:
+          type: object
+          properties:
+            jobs_discovered_today:
+              type: integer
+            jobs_qualified_today:
+              type: integer
+            proposals_auto_generated_today:
+              type: integer
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

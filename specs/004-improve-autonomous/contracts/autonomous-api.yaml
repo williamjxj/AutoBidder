@@ -1,0 +1,240 @@
+# API Contract: Autonomous Bidding (004-improve-autonomous)
+# Auto-discovery, qualification, notifications, auto-generate
+# Aligns with FR-001 through FR-012
+
+openapi: 3.0.3
+info:
+  title: Auto-Bidder Autonomous API
+  version: 1.0.0
+  description: Endpoints for autonomous job discovery, qualification, and proposal generation
+
+paths:
+  /api/autonomous/settings:
+    get:
+      summary: Get autonomy settings for current user (FR-002, FR-006, FR-010)
+      operationId: getAutonomousSettings
+      tags: [autonomous]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User autonomy settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutonomousSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Update autonomy settings (FR-002, FR-006, FR-010, FR-011)
+      operationId: updateAutonomousSettings
+      tags: [autonomous]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutonomousSettingsUpdate'
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutonomousSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/autonomous/run:
+    post:
+      summary: Trigger manual autonomous run (discovery + qualify + notify + auto-generate)
+      operationId: triggerAutonomousRun
+      tags: [autonomous]
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Run started in background
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [started]
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/autonomous/status:
+    get:
+      summary: Get last autonomous run status and stats
+      operationId: getAutonomousStatus
+      tags: [autonomous]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Run status and stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  last_run_at:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                    enum: [idle, running, completed, failed]
+                  jobs_discovered:
+                    type: integer
+                  jobs_qualified:
+                    type: integer
+                  proposals_auto_generated:
+                    type: integer
+                  notifications_sent:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/proposals/{proposal_id}/quality:
+    get:
+      summary: Get proposal quality score and suggestions (FR-009)
+      operationId: getProposalQuality
+      tags: [proposals, autonomous]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: proposal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quality analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalQuality'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AutonomousSettings:
+      type: object
+      required: [auto_discovery_enabled, autonomy_level]
+      properties:
+        auto_discovery_enabled:
+          type: boolean
+          default: false
+        discovery_interval_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+          default: 15
+        autonomy_level:
+          type: string
+          enum: [assisted, discovery_only, semi_autonomous, full_auto_generate]
+          default: assisted
+        qualification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.6
+        notification_enabled:
+          type: boolean
+          default: true
+        notification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.8
+        auto_generate_enabled:
+          type: boolean
+          default: false
+        auto_generate_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.85
+
+    AutonomousSettingsUpdate:
+      type: object
+      properties:
+        auto_discovery_enabled:
+          type: boolean
+        discovery_interval_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+        autonomy_level:
+          type: string
+          enum: [assisted, discovery_only, semi_autonomous, full_auto_generate]
+        qualification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        notification_enabled:
+          type: boolean
+        notification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        auto_generate_enabled:
+          type: boolean
+        auto_generate_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    ProposalQuality:
+      type: object
+      properties:
+        overall_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        dimension_scores:
+          type: object
+          additionalProperties:
+            type: number
+        suggestions:
+          type: array
+          items:
+            type: string
+        word_count:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+    BadRequest:
+      description: Invalid request body
+    NotFound:
+      description: Resource not found

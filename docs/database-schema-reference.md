@@ -6,25 +6,25 @@ Purpose, relationships, and workflows for all PostgreSQL tables.
 
 ## 1. Table Overview
 
-| Table | Purpose |
-|-------|---------|
-| **users** | User accounts (auth, email, password) |
-| **user_profiles** | Extended user data (subscription, preferences, onboarding) |
-| **jobs** | Job listings from ETL (HuggingFace, Freelancer, etc.) — source of truth for Projects UI |
-| **etl_runs** | ETL pipeline run history (source, counts, status) |
-| **user_job_status** | Per-user status on jobs (new, reviewed, applied, rejected) |
-| **projects** | User-saved/curated projects (legacy or alternate workflow) |
-| **keywords** | User-defined search keywords for job matching |
-| **bidding_strategies** | AI proposal generation configs (prompts, tone, temperature) |
-| **proposals** | Generated proposals linked to jobs and strategies |
-| **bids** | Bid submissions linked to projects |
-| **knowledge_base_documents** | User-uploaded docs for RAG (portfolio, case studies) |
-| **draft_work** | Auto-saved drafts (proposals, etc.) |
-| **user_session_states** | Session context (active feature, navigation, filters) |
-| **scraping_jobs** | Scraping task queue (platform, search terms, status) |
-| **platform_credentials** | Stored API keys/tokens for Upwork, Freelancer, etc. |
-| **workflow_analytics** | Workflow event metrics (duration, success) |
-| **analytics_events** | User behavior events (event_type, event_data) |
+| Table                        | Purpose                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| **users**                    | User accounts (auth, email, password)                                                   |
+| **user_profiles**            | Extended user data (subscription, preferences, onboarding)                              |
+| **jobs**                     | Job listings from ETL (HuggingFace, Freelancer, etc.) — source of truth for Projects UI |
+| **etl_runs**                 | ETL pipeline run history (source, counts, status)                                       |
+| **user_job_status**          | Per-user status on jobs (new, reviewed, applied, rejected)                              |
+| **projects**                 | User-saved/curated projects (legacy or alternate workflow)                              |
+| **keywords**                 | User-defined search keywords for job matching                                           |
+| **bidding_strategies**       | AI proposal generation configs (prompts, tone, temperature)                             |
+| **proposals**                | Generated proposals linked to jobs and strategies                                       |
+| **bids**                     | Bid submissions linked to projects                                                      |
+| **knowledge_base_documents** | User-uploaded docs for RAG (portfolio, case studies)                                    |
+| **draft_work**               | Auto-saved drafts (proposals, etc.)                                                     |
+| **user_session_states**      | Session context (active feature, navigation, filters)                                   |
+| **scraping_jobs**            | Scraping task queue (platform, search terms, status)                                    |
+| **platform_credentials**     | Stored API keys/tokens for Upwork, Freelancer, etc.                                     |
+| **workflow_analytics**       | Workflow event metrics (duration, success)                                              |
+| **analytics_events**         | User behavior events (event_type, event_data)                                           |
 
 ---
 

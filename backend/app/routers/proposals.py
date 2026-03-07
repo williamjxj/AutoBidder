@@ -9,6 +9,7 @@ from app.models.proposal import (
     Proposal,
     ProposalCreate,
     ProposalListResponse,
+    ProposalQuality,
     ProposalSubmitRequest,
     ProposalUpdate,
 )
@@ -37,6 +38,18 @@ async def list_proposals(
         offset=offset,
     )
     return ProposalListResponse(proposals=proposals, total=len(proposals))
+
+
+@router.get("/{proposal_id}/quality", response_model=ProposalQuality)
+async def get_proposal_quality(
+    proposal_id: UUID,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Get quality score and suggestions for a proposal (T033, FR-009)."""
+    quality = await proposal_service.get_proposal_quality(proposal_id, current_user.id)
+    if not quality:
+        raise HTTPException(status_code=404, detail="Quality data not available for this proposal")
+    return ProposalQuality(**quality)
 
 
 @router.get("/{proposal_id}", response_model=Proposal)

@@ -68,6 +68,7 @@ def start_scheduler() -> None:
     """
     Start the ETL scheduler.
     Only adds HF ingestion job when ETL_USE_PERSISTENCE is enabled.
+    Adds autonomous discovery job when AUTO_DISCOVERY_ENABLED and ETL_USE_PERSISTENCE.
     """
     if not settings.etl_use_persistence:
         logger.info("ETL persistence disabled; scheduler not started")
@@ -88,6 +89,20 @@ def start_scheduler() -> None:
         id="freelancer_etl",
         replace_existing=True,
     )
+
+    # Autonomous discovery (004-improve-autonomous): run every 15 min for users with auto_discovery_enabled
+    auto_enabled = getattr(settings, "auto_discovery_enabled", False)
+    if auto_enabled:
+        from app.tasks.autonomous_tasks import run_autonomous_discovery_job
+
+        sched.add_job(
+            run_autonomous_discovery_job,
+            IntervalTrigger(minutes=15),
+            id="auto_discovery",
+            replace_existing=True,
+        )
+        logger.info("Autonomous discovery job added (every 15 minutes)")
+
     sched.start()
     logger.info(
         "ETL scheduler started; HF every %s h, Freelancer every %s h",

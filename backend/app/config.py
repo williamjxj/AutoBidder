@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     hf_etl_schedule_hours: int = Field(default=168, alias="HF_ETL_SCHEDULE_HOURS")  # 168 = weekly
     freelancer_etl_schedule_hours: int = Field(default=24, alias="FREELANCER_ETL_SCHEDULE_HOURS")  # 24 = daily
 
+    # Autonomous Bidding (004-improve-autonomous)
+    auto_discovery_enabled: bool = Field(default=False, alias="AUTO_DISCOVERY_ENABLED")
+    sendgrid_api_key: Optional[str] = Field(None, alias="SENDGRID_API_KEY")
+    auto_proposal_threshold: float = Field(default=0.85, alias="AUTO_PROPOSAL_THRESHOLD")
+
     # Workflow Optimization Configuration
     session_state_ttl_hours: int = Field(default=24, alias="SESSION_STATE_TTL_HOURS")
     draft_retention_hours: int = Field(default=24, alias="DRAFT_RETENTION_HOURS")

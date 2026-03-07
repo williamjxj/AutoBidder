@@ -36,6 +36,11 @@ def _row_to_proposal(row: dict) -> Proposal:
         revision_count=row["revision_count"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        source=row.get("source"),
+        auto_generated_at=row.get("auto_generated_at"),
+        quality_score=row.get("quality_score"),
+        quality_breakdown=row.get("quality_breakdown"),
+        quality_suggestions=row.get("quality_suggestions"),
     )
 
 
@@ -77,8 +82,26 @@ async def get_proposal(proposal_id: UUID, user_id: UUID) -> Optional[Proposal]:
     
     if not row:
         return None
-    
+
     return _row_to_proposal(dict(row))
+
+
+async def get_proposal_quality(
+    proposal_id: UUID, user_id: UUID
+) -> Optional[dict]:
+    """
+    Get quality score and suggestions for a proposal (T033).
+    Returns None if proposal not found or has no quality data.
+    """
+    proposal = await get_proposal(proposal_id, user_id)
+    if not proposal or proposal.quality_score is None:
+        return None
+    return {
+        "overall_score": proposal.quality_score,
+        "dimension_scores": proposal.quality_breakdown or {},
+        "suggestions": proposal.quality_suggestions or [],
+        "word_count": None,  # Not stored; could compute from description if needed
+    }
 
 
 async def create_proposal(
@@ -114,6 +137,61 @@ async def create_proposal(
         proposal_data.status or "draft",
     )
     
+    return _row_to_proposal(dict(row))
+
+
+async def create_auto_generated_proposal(
+    user_id: UUID,
+    job_id: str,
+    title: str,
+    description: str,
+    budget: Optional[str],
+    timeline: Optional[str],
+    skills: List[str],
+    strategy_id: Optional[str],
+    ai_model_used: Optional[str],
+    job_url: Optional[str] = None,
+    job_platform: Optional[str] = None,
+    client_name: Optional[str] = None,
+    quality_score: Optional[int] = None,
+    quality_breakdown: Optional[dict] = None,
+    quality_suggestions: Optional[List[str]] = None,
+) -> Proposal:
+    """
+    Create a proposal with source='auto_generated' and auto_generated_at=NOW().
+    Per specs/004-improve-autonomous T026. T032: persist quality_score, quality_breakdown, quality_suggestions.
+    """
+    import json
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO proposals (
+                user_id, job_id, title, description, budget, timeline, skills,
+                job_url, job_platform, client_name, strategy_id,
+                generated_with_ai, ai_model_used, status, source, auto_generated_at,
+                quality_score, quality_breakdown, quality_suggestions
+            )
+            VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, true, $12, 'draft', 'auto_generated', NOW(),
+                $13, $14::jsonb, $15)
+            RETURNING *
+            """,
+            user_id,
+            job_id,
+            title,
+            description,
+            budget,
+            timeline,
+            skills or [],
+            job_url,
+            job_platform,
+            client_name,
+            UUID(strategy_id) if strategy_id else None,
+            ai_model_used,
+            quality_score,
+            json.dumps(quality_breakdown) if quality_breakdown else None,
+            quality_suggestions,
+        )
     return _row_to_proposal(dict(row))
 
 

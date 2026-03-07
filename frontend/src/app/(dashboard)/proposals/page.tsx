@@ -123,10 +123,9 @@ export default function ProposalsPage() {
     setFilters(filters)
   }, [filters, setFilters])
 
-  // Update active entity when viewing a proposal
   const handleProposalClick = (proposalId: string) => {
     updateActiveEntity('proposal', proposalId)
-    // TODO: Navigate to proposal detail/edit page
+    router.push(`/proposals/${proposalId}`)
   }
 
   const handleNewProposal = () => {
