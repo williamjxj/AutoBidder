@@ -86,8 +86,14 @@ class Settings(BaseSettings):
 
     # Autonomous Bidding (004-improve-autonomous)
     auto_discovery_enabled: bool = Field(default=False, alias="AUTO_DISCOVERY_ENABLED")
-    sendgrid_api_key: Optional[str] = Field(None, alias="SENDGRID_API_KEY")
+    resend_api_key: Optional[str] = Field(None, alias="RESEND_API_KEY")
     auto_proposal_threshold: float = Field(default=0.85, alias="AUTO_PROPOSAL_THRESHOLD")
+
+    # Proposal submission email (sent to customer on Submit Proposal)
+    proposal_submit_email: str = Field(
+        default="bestitconsultingca@gmail.com",
+        alias="PROPOSAL_SUBMIT_EMAIL",
+    )
 
     # Workflow Optimization Configuration
     session_state_ttl_hours: int = Field(default=24, alias="SESSION_STATE_TTL_HOURS")
