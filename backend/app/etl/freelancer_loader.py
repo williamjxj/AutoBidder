@@ -126,7 +126,7 @@ async def run_freelancer_ingestion(
     """
     from datetime import datetime, timezone
 
-    from app.services.job_service import record_etl_run, upsert_jobs
+    from app.services.project_service import record_etl_run, upsert_jobs
 
     if jobs is None and json_path:
         jobs = load_jobs_from_json_file(json_path)

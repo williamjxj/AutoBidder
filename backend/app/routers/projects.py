@@ -32,13 +32,13 @@ from ..models.project import (
     ProjectListResponse
 )
 from ..services.hf_job_source import fetch_hf_jobs, get_available_datasets
-from ..services.job_service import (
-    list_jobs as job_service_list_jobs,
-    get_stats as job_service_get_stats,
-    get_job_by_id as job_service_get_job,
-    get_jobs_by_fingerprints as job_service_get_jobs_by_fingerprints,
-    set_user_job_status as job_service_set_status,
-    upsert_jobs as job_service_upsert_jobs,
+from ..services.project_service import (
+    list_projects,
+    get_stats,
+    get_project_by_id,
+    get_projects_by_fingerprints,
+    set_user_project_status,
+    upsert_jobs,
 )
 from ..services.ai_service import generate_text
 from ..services.keyword_service import keyword_service
@@ -105,9 +105,9 @@ async def discover_projects(
                 keyword_filter=keywords,
             )
             if records:
-                await job_service_upsert_jobs(records, etl_source=dataset_id)
+                await upsert_jobs(records, etl_source=dataset_id)
                 fingerprints = [r.fingerprint_hash for r in records]
-                jobs = await job_service_get_jobs_by_fingerprints(
+                jobs = await get_projects_by_fingerprints(
                     fingerprints,
                     user_id=str(current_user.id),
                 )
@@ -194,7 +194,7 @@ async def list_projects(
     # When ETL persistence is enabled, read from database (FR-001)
     if settings.etl_use_persistence:
         try:
-            jobs, total = await job_service_list_jobs(
+            jobs, total = await list_projects(
                 limit=limit,
                 offset=offset,
                 search=search,
@@ -376,7 +376,7 @@ async def get_project_stats(
     # When ETL persistence is enabled, read from database (FR-001)
     if settings.etl_use_persistence:
         try:
-            return await job_service_get_stats()
+            return await get_stats()
         except Exception as e:
             logger.error(f"Failed to get stats from database: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -497,7 +497,7 @@ async def get_project(
     logger.info(f"User {current_user.email} getting project {project_id}")
 
     if settings.etl_use_persistence:
-        job = await job_service_get_job(project_id, user_id=str(current_user.id))
+        job = await get_project_by_id(project_id, user_id=str(current_user.id))
         if job:
             return job
         raise HTTPException(status_code=404, detail="Project not found")
@@ -541,8 +541,8 @@ async def update_project_status(
         )
 
     try:
-        await job_service_set_status(str(current_user.id), project_id, status)
-        job = await job_service_get_job(project_id, user_id=str(current_user.id))
+        await set_user_project_status(str(current_user.id), project_id, status)
+        job = await get_project_by_id(project_id, user_id=str(current_user.id))
         if job:
             return job
     except ValueError as e:

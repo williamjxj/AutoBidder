@@ -1,9 +1,9 @@
 """
-Job Service
+Project Service
 
-CRUD and query operations for jobs table.
+CRUD and query operations for projects table (formerly jobs).
 Uses asyncpg for database access.
-Per specs/003-projects-etl-persistence/data-model.md
+Per specs/005-refactor-pg-database/data-model.md
 """
 
 import json
@@ -35,9 +35,9 @@ def _parse_posted_at(value: Any) -> Optional[datetime]:
 PLATFORM_MAP = {"hf_dataset": "huggingface_dataset"}
 
 
-async def upsert_jobs(records: List[JobRecord], etl_source: str = "hf_loader") -> tuple[int, int]:
+async def upsert_projects(records: List[JobRecord], etl_source: str = "hf_loader") -> tuple[int, int]:
     """
-    Upsert jobs by fingerprint_hash. Returns (inserted_count, updated_count).
+    Upsert projects by fingerprint_hash. Returns (inserted_count, updated_count).
     """
     pool = await get_db_pool()
     inserted = 0
@@ -62,7 +62,7 @@ async def upsert_jobs(records: List[JobRecord], etl_source: str = "hf_loader") -
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO jobs (
+                INSERT INTO projects (
                     platform, external_id, external_url, fingerprint_hash,
                     category, title, description, skills_required,
                     budget_min, budget_max, budget_currency,
@@ -106,7 +106,11 @@ async def upsert_jobs(records: List[JobRecord], etl_source: str = "hf_loader") -
     return inserted, updated
 
 
-async def list_jobs(
+# Backward-compatible alias
+upsert_jobs = upsert_projects
+
+
+async def list_projects(
     limit: int = 50,
     offset: int = 0,
     search: Optional[str] = None,
@@ -118,9 +122,9 @@ async def list_jobs(
     sort_by: str = "date",
 ) -> tuple[List[Dict[str, Any]], int]:
     """
-    List jobs with filters and pagination.
-    Returns (jobs, total_count).
-    If user_id and status_filter/applied are set, joins user_job_status.
+    List projects with filters and pagination.
+    Returns (projects, total_count).
+    If user_id and status_filter/applied are set, joins user_project_status.
     """
     pool = await get_db_pool()
     conditions: List[str] = ["1=1"]
@@ -133,21 +137,21 @@ async def list_jobs(
             or_parts = []
             for kw in keywords:
                 params.append(f"%{kw}%")
-                or_parts.append(f"(j.title ILIKE ${idx} OR j.description ILIKE ${idx})")
+                or_parts.append(f"(p.title ILIKE ${idx} OR p.description ILIKE ${idx})")
                 idx += 1
             conditions.append("(" + " OR ".join(or_parts) + ")")
 
     if platform and platform != "all":
         params.append(platform)
-        conditions.append(f"j.platform = ${idx}")
+        conditions.append(f"p.platform = ${idx}")
         idx += 1
 
     if category:
         params.append(f"%{category}%")
-        conditions.append(f"j.category::text ILIKE ${idx}")
+        conditions.append(f"p.category::text ILIKE ${idx}")
         idx += 1
 
-    # User status filter (reviewed, applied, won, lost, archived, new) vs job status (new, matched, archived, expired)
+    # User status filter (reviewed, applied, won, lost, archived, new)
     user_statuses = {"reviewed", "applied", "won", "lost", "archived"}
     use_user_status_filter = (
         user_id is not None
@@ -157,43 +161,54 @@ async def list_jobs(
     )
 
     join_clause = ""
+    user_id_param_idx = None
     if user_id is not None:
         params.append(user_id)
-        join_clause = f" LEFT JOIN user_job_status ujs ON ujs.job_id = j.id AND ujs.user_id = ${idx}::uuid"
+        user_id_param_idx = idx
+        join_clause = f" LEFT JOIN user_project_status ups ON ups.project_id = p.id AND ups.user_id = ${idx}::uuid"
         idx += 1
         if use_user_status_filter:
             if status_filter == "new":
-                conditions.append("ujs.id IS NULL")
+                conditions.append("ups.id IS NULL")
             else:
                 params.append(status_filter)
-                conditions.append(f"ujs.status = ${idx}")
+                conditions.append(f"ups.status = ${idx}")
                 idx += 1
         elif applied is not None:
             if applied:
-                conditions.append("ujs.status IN ('applied', 'won', 'lost')")
+                conditions.append("ups.status IN ('applied', 'won', 'lost')")
             else:
-                conditions.append("(ujs.id IS NULL OR ujs.status NOT IN ('applied', 'won', 'lost'))")
+                conditions.append("(ups.id IS NULL OR ups.status NOT IN ('applied', 'won', 'lost'))")
     elif status_filter and status_filter != "all":
         params.append(status_filter)
-        conditions.append(f"j.status::text = ${idx}")
+        conditions.append(f"p.status::text = ${idx}")
         idx += 1
 
     where_clause = " AND ".join(conditions)
 
-    order = "j.posted_at DESC NULLS LAST" if sort_by == "date" else "j.category, j.posted_at DESC NULLS LAST"
+    order = "p.posted_at DESC NULLS LAST" if sort_by == "date" else "p.category, p.posted_at DESC NULLS LAST"
     if sort_by == "budget":
-        order = "j.budget_max DESC NULLS LAST, j.budget_min DESC NULLS LAST"
+        order = "p.budget_max DESC NULLS LAST, p.budget_min DESC NULLS LAST"
 
     select_cols = (
-        "j.id, j.platform, j.external_id, j.fingerprint_hash, j.category, j.title, j.description, "
-        "j.skills_required, j.budget_min, j.budget_max, j.budget_currency, "
-        "j.employer_name, j.etl_source, j.posted_at, j.status"
+        "p.id, p.platform, p.external_id, p.fingerprint_hash, p.category, p.title, p.description, "
+        "p.skills_required, p.budget_min, p.budget_max, p.budget_currency, "
+        "p.employer_name, p.etl_source, p.posted_at, p.status"
     )
     if user_id is not None:
-        select_cols += ", ujs.status AS user_status, ujq.qualification_score, ujq.qualification_reason"
-        join_clause += " LEFT JOIN user_job_qualifications ujq ON ujq.job_id = j.id AND ujq.user_id = $1::uuid"
+        select_cols += ", ups.status AS user_status"
+        # Optional: join user_project_qualifications if table exists (migration 010)
+        try:
+            exists = await pool.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_project_qualifications')"
+            )
+            if exists and user_id_param_idx is not None:
+                select_cols += ", upq.qualification_score, upq.qualification_reason"
+                join_clause += f" LEFT JOIN user_project_qualifications upq ON upq.project_id = p.id AND upq.user_id = ${user_id_param_idx}::uuid"
+        except Exception:
+            pass
 
-    count_sql = f"SELECT COUNT(*)::int FROM jobs j{join_clause} WHERE {where_clause}"
+    count_sql = f"SELECT COUNT(*)::int FROM projects p{join_clause} WHERE {where_clause}"
     total = await pool.fetchval(count_sql, *params)
 
     params.extend([limit, offset])
@@ -201,28 +216,32 @@ async def list_jobs(
     offset_idx = idx + 1
     list_sql = f"""
         SELECT {select_cols}
-        FROM jobs j{join_clause}
+        FROM projects p{join_clause}
         WHERE {where_clause}
         ORDER BY {order}
         LIMIT ${limit_idx} OFFSET ${offset_idx}
     """
     rows = await pool.fetch(list_sql, *params)
 
-    jobs = [
-        _row_to_job_dict(
+    projects = [
+        _row_to_project_dict(
             r,
             use_user_status=user_id is not None,
             include_qualification=user_id is not None,
         )
         for r in rows
     ]
-    return jobs, total
+    return projects, total
 
 
-def _row_to_job_dict(
+# Backward-compatible alias
+list_jobs = list_projects
+
+
+def _row_to_project_dict(
     row: Any, use_user_status: bool = False, include_qualification: bool = False
 ) -> Dict[str, Any]:
-    """Convert DB row to API response shape. When use_user_status, prefer user_status over job status."""
+    """Convert DB row to API response shape."""
     status = "new"
     if use_user_status and row.get("user_status"):
         status = row["user_status"]
@@ -254,16 +273,16 @@ async def get_stats() -> Dict[str, Any]:
     """Aggregate stats for projects page."""
     pool = await get_db_pool()
 
-    total = await pool.fetchval("SELECT COUNT(*)::int FROM jobs")
+    total = await pool.fetchval("SELECT COUNT(*)::int FROM projects")
     by_platform = await pool.fetch(
-        "SELECT platform::text, COUNT(*)::int FROM jobs GROUP BY platform"
+        "SELECT platform::text, COUNT(*)::int FROM projects GROUP BY platform"
     )
     by_platform_dict = {r["platform"]: r["count"] for r in by_platform}
 
     by_skill_rows = await pool.fetch(
         """
         SELECT unnest(skills_required) AS skill, COUNT(*)::int AS cnt
-        FROM jobs WHERE skills_required IS NOT NULL AND array_length(skills_required, 1) > 0
+        FROM projects WHERE skills_required IS NOT NULL AND array_length(skills_required, 1) > 0
         GROUP BY unnest(skills_required)
         ORDER BY cnt DESC
         LIMIT 15
@@ -278,7 +297,7 @@ async def get_stats() -> Dict[str, Any]:
     avg_budget = await pool.fetchval(
         """
         SELECT AVG((COALESCE(budget_min, 0) + COALESCE(budget_max, 0)) / 2)::float
-        FROM jobs WHERE budget_min IS NOT NULL OR budget_max IS NOT NULL
+        FROM projects WHERE budget_min IS NOT NULL OR budget_max IS NOT NULL
         """
     )
 
@@ -301,17 +320,16 @@ async def get_stats() -> Dict[str, Any]:
     }
 
 
-# User job status values (user_job_status table)
 USER_STATUS_VALUES = frozenset({"reviewed", "applied", "won", "lost", "archived"})
 
 
-async def set_user_job_status(
+async def set_user_project_status(
     user_id: str,
-    job_id: str,
+    project_id: str,
     status: str,
 ) -> bool:
     """
-    Upsert or clear user_job_status for a job.
+    Upsert or clear user_project_status for a project.
     Status must be one of: reviewed, applied, won, lost, archived.
     Use status='new' to clear (delete) the user's status row.
     Returns True on success.
@@ -321,11 +339,11 @@ async def set_user_job_status(
         async with pool.acquire() as conn:
             await conn.execute(
                 """
-                DELETE FROM user_job_status
-                WHERE user_id = $1::uuid AND job_id = $2::uuid
+                DELETE FROM user_project_status
+                WHERE user_id = $1::uuid AND project_id = $2::uuid
                 """,
                 user_id,
-                job_id,
+                project_id,
             )
         return True
 
@@ -336,39 +354,43 @@ async def set_user_job_status(
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO user_job_status (user_id, job_id, status)
+            INSERT INTO user_project_status (user_id, project_id, status)
             VALUES ($1::uuid, $2::uuid, $3)
-            ON CONFLICT (user_id, job_id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
+            ON CONFLICT (user_id, project_id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
             """,
             user_id,
-            job_id,
+            project_id,
             status,
         )
     return True
 
 
-async def get_job_by_id(
-    job_id: str,
+# Backward-compatible alias
+set_user_job_status = set_user_project_status
+
+
+async def get_project_by_id(
+    project_id: str,
     user_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Get a single job by ID. Optionally include user's status from user_job_status.
-    Returns None if job not found.
+    Get a single project by ID. Optionally include user's status from user_project_status.
+    Returns None if project not found.
     """
     pool = await get_db_pool()
     if user_id:
         row = await pool.fetchrow(
             """
-            SELECT j.id, j.platform, j.external_id, j.fingerprint_hash,
-                   j.category, j.title, j.description, j.skills_required,
-                   j.budget_min, j.budget_max, j.budget_currency,
-                   j.employer_name, j.etl_source, j.posted_at, j.status,
-                   ujs.status AS user_status
-            FROM jobs j
-            LEFT JOIN user_job_status ujs ON ujs.job_id = j.id AND ujs.user_id = $2::uuid
-            WHERE j.id = $1::uuid
+            SELECT p.id, p.platform, p.external_id, p.fingerprint_hash,
+                   p.category, p.title, p.description, p.skills_required,
+                   p.budget_min, p.budget_max, p.budget_currency,
+                   p.employer_name, p.etl_source, p.posted_at, p.status,
+                   ups.status AS user_status
+            FROM projects p
+            LEFT JOIN user_project_status ups ON ups.project_id = p.id AND ups.user_id = $2::uuid
+            WHERE p.id = $1::uuid
             """,
-            job_id,
+            project_id,
             user_id,
         )
     else:
@@ -378,27 +400,31 @@ async def get_job_by_id(
                    category, title, description, skills_required,
                    budget_min, budget_max, budget_currency,
                    employer_name, etl_source, posted_at, status
-            FROM jobs WHERE id = $1::uuid
+            FROM projects WHERE id = $1::uuid
             """,
-            job_id,
+            project_id,
         )
 
     if not row:
         return None
 
-    d = _row_to_job_dict(row)
+    d = _row_to_project_dict(row)
     if user_id and row.get("user_status"):
         d["status"] = row["user_status"]
     return d
 
 
-async def get_jobs_by_fingerprints(
+# Backward-compatible alias
+get_job_by_id = get_project_by_id
+
+
+async def get_projects_by_fingerprints(
     fingerprint_hashes: List[str],
     user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Get jobs by fingerprint hashes (e.g. after Discover upsert).
-    Returns jobs in API shape, optionally with user status.
+    Get projects by fingerprint hashes (e.g. after Discover upsert).
+    Returns projects in API shape, optionally with user status.
     """
     if not fingerprint_hashes:
         return []
@@ -406,14 +432,14 @@ async def get_jobs_by_fingerprints(
     if user_id:
         rows = await pool.fetch(
             """
-            SELECT j.id, j.platform, j.external_id, j.fingerprint_hash,
-                   j.category, j.title, j.description, j.skills_required,
-                   j.budget_min, j.budget_max, j.budget_currency,
-                   j.employer_name, j.etl_source, j.posted_at, j.status,
-                   ujs.status AS user_status
-            FROM jobs j
-            LEFT JOIN user_job_status ujs ON ujs.job_id = j.id AND ujs.user_id = $2::uuid
-            WHERE j.fingerprint_hash = ANY($1::text[])
+            SELECT p.id, p.platform, p.external_id, p.fingerprint_hash,
+                   p.category, p.title, p.description, p.skills_required,
+                   p.budget_min, p.budget_max, p.budget_currency,
+                   p.employer_name, p.etl_source, p.posted_at, p.status,
+                   ups.status AS user_status
+            FROM projects p
+            LEFT JOIN user_project_status ups ON ups.project_id = p.id AND ups.user_id = $2::uuid
+            WHERE p.fingerprint_hash = ANY($1::text[])
             """,
             fingerprint_hashes,
             user_id,
@@ -425,14 +451,18 @@ async def get_jobs_by_fingerprints(
                    category, title, description, skills_required,
                    budget_min, budget_max, budget_currency,
                    employer_name, etl_source, posted_at, status
-            FROM jobs WHERE fingerprint_hash = ANY($1::text[])
+            FROM projects WHERE fingerprint_hash = ANY($1::text[])
             """,
             fingerprint_hashes,
         )
     return [
-        _row_to_job_dict(r, use_user_status=user_id is not None)
+        _row_to_project_dict(r, use_user_status=user_id is not None)
         for r in rows
     ]
+
+
+# Backward-compatible alias
+get_jobs_by_fingerprints = get_projects_by_fingerprints
 
 
 async def record_etl_run(

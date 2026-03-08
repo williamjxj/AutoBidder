@@ -115,7 +115,7 @@ async def run_hf_ingestion(
     """
     from datetime import datetime, timezone
 
-    from app.services.job_service import record_etl_run, upsert_jobs
+    from app.services.project_service import record_etl_run, upsert_jobs
 
     started = datetime.now(timezone.utc)
     jobs_extracted = 0

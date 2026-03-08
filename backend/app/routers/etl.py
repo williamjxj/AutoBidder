@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from .auth import get_current_user
 from ..models.auth import UserResponse
-from ..services.job_service import list_etl_runs
+from ..services.project_service import list_etl_runs
 from ..etl.hf_loader import run_hf_ingestion
 
 logger = logging.getLogger(__name__)

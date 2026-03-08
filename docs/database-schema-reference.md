@@ -4,20 +4,35 @@ Purpose, relationships, and workflows for all PostgreSQL tables.
 
 ---
 
-## 1. Table Overview
+## 1. Nav-to-Table Mapping
+
+| UI Nav         | Route           | Primary Table(s)              | Group    |
+|----------------|-----------------|-------------------------------|----------|
+| Dashboard      | /dashboard      | Aggregates (multiple)          | —        |
+| Projects       | /projects       | **projects**                   | Resources |
+| Proposals      | /proposals      | **proposals**                  | Bidders  |
+| Knowledge Base | /knowledge-base | knowledge_base_documents      | Resources |
+| Strategies     | /strategies     | bidding_strategies            | Bidders  |
+| Keywords       | /keywords       | keywords                      | Resources |
+| Analytics      | /analytics      | workflow_analytics, analytics_events | Resources |
+| Settings       | /settings       | user_profiles, platform_credentials | Resources |
+
+**Backend-only (no nav)**: etl_runs, user_session_states, draft_work, scraping_jobs, user_project_status, user_project_qualifications
+
+---
+
+## 2. Table Overview
 
 | Table                        | Purpose                                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------------------- |
 | **users**                    | User accounts (auth, email, password)                                                   |
 | **user_profiles**            | Extended user data (subscription, preferences, onboarding)                              |
-| **jobs**                     | Job listings from ETL (HuggingFace, Freelancer, etc.) — source of truth for Projects UI |
+| **projects**                 | Job listings from ETL (HuggingFace, Freelancer) — backs Projects nav                    |
+| **user_project_status**     | Per-user pipeline status on projects (reviewed, applied, won, lost)                      |
 | **etl_runs**                 | ETL pipeline run history (source, counts, status)                                       |
-| **user_job_status**          | Per-user status on jobs (new, reviewed, applied, rejected)                              |
-| **projects**                 | User-saved/curated projects (legacy or alternate workflow)                              |
 | **keywords**                 | User-defined search keywords for job matching                                           |
 | **bidding_strategies**       | AI proposal generation configs (prompts, tone, temperature)                             |
-| **proposals**                | Generated proposals linked to jobs and strategies                                       |
-| **bids**                     | Bid submissions linked to projects                                                      |
+| **proposals**                | User-created proposals for projects — backs Proposals nav                               |
 | **knowledge_base_documents** | User-uploaded docs for RAG (portfolio, case studies)                                    |
 | **draft_work**               | Auto-saved drafts (proposals, etc.)                                                     |
 | **user_session_states**      | Session context (active feature, navigation, filters)                                   |
@@ -26,9 +41,11 @@ Purpose, relationships, and workflows for all PostgreSQL tables.
 | **workflow_analytics**       | Workflow event metrics (duration, success)                                              |
 | **analytics_events**         | User behavior events (event_type, event_data)                                           |
 
+**Removed (005-refactor)**: jobs (renamed to projects), legacy projects, bids
+
 ---
 
-## 2. Entity Relationship Diagram
+## 3. Entity Relationship Diagram
 
 ```mermaid
 erDiagram
@@ -36,9 +53,7 @@ erDiagram
     users ||--o{ keywords : "owns"
     users ||--o{ bidding_strategies : "owns"
     users ||--o{ proposals : "creates"
-    users ||--o{ bids : "creates"
-    users ||--o{ user_job_status : "tracks"
-    users ||--o{ projects : "owns"
+    users ||--o{ user_project_status : "tracks"
     users ||--o{ knowledge_base_documents : "uploads"
     users ||--o{ draft_work : "has"
     users ||--o{ user_session_states : "has"
@@ -47,13 +62,10 @@ erDiagram
     users ||--o{ workflow_analytics : "generates"
     users ||--o{ analytics_events : "generates"
 
-    jobs ||--o{ user_job_status : "tracked by"
-    jobs ||--o{ proposals : "targeted by"
+    projects ||--o{ user_project_status : "tracked by"
+    projects ||--o{ proposals : "targeted by"
 
     bidding_strategies ||--o{ proposals : "used by"
-    bidding_strategies ||--o{ bids : "used by"
-
-    projects ||--o{ bids : "receives"
 
     users {
         uuid id PK
@@ -63,7 +75,7 @@ erDiagram
         boolean is_active
     }
 
-    jobs {
+    projects {
         uuid id PK
         text fingerprint_hash UK
         text platform
@@ -76,17 +88,17 @@ erDiagram
         text etl_source
     }
 
-    user_job_status {
+    user_project_status {
         uuid id PK
         uuid user_id FK
-        uuid job_id FK
+        uuid project_id FK
         varchar status
     }
 
     proposals {
         uuid id PK
         uuid user_id FK
-        uuid job_id FK
+        uuid project_id FK
         uuid strategy_id FK
         text title
         text description
@@ -137,7 +149,7 @@ flowchart TB
     DEDUP --> UPSERT
     UPSERT --> RECORD
 
-    UPSERT --> jobs[(jobs table)]
+    UPSERT --> projects[(projects table)]
     RECORD --> etl_runs[(etl_runs table)]
 ```
 
@@ -151,21 +163,21 @@ sequenceDiagram
     participant AI as AI Service
 
     U->>API: POST /projects/discover (keywords)
-    API->>DB: list_jobs / upsert from HF
-    DB-->>API: jobs
-    API-->>U: discovered jobs
+    API->>DB: list_projects / upsert from HF
+    DB-->>API: projects
+    API-->>U: discovered projects
 
     U->>API: GET /projects/list
-    API->>DB: list_jobs (with user_job_status)
-    DB-->>API: jobs + status
+    API->>DB: list_projects (with user_project_status)
+    DB-->>API: projects + status
     API-->>U: projects list
 
-    U->>API: Create proposal for job
-    API->>AI: generate proposal (strategy + job context)
+    U->>API: Create proposal for project
+    API->>AI: generate proposal (strategy + project context)
     AI-->>API: draft proposal
     API->>DB: INSERT proposals
     U->>API: Submit proposal
-    API->>DB: UPDATE user_job_status (applied)
+    API->>DB: UPDATE user_project_status (applied)
 ```
 
 ### 3.3 User-Centric Data Flow
@@ -178,13 +190,12 @@ flowchart LR
 
     subgraph Discovery["Discovery & Matching"]
         K[keywords]
-        JS[user_job_status]
+        UPS[user_project_status]
     end
 
     subgraph Content["Content Creation"]
         BS[bidding_strategies]
         P[proposals]
-        B[bids]
     end
 
     subgraph Persistence["Persistence"]
@@ -199,18 +210,17 @@ flowchart LR
     end
 
     U --> K
-    U --> JS
+    U --> UPS
     U --> BS
     U --> P
-    U --> B
     U --> DW
     U --> KB
     U --> USS
     U --> WA
     U --> AE
 
-    jobs[(jobs)] -.->|"tracked by"| JS
-    jobs -.->|"targeted by"| P
+    projects[(projects)] -.->|"tracked by"| UPS
+    projects -.->|"targeted by"| P
 ```
 
 ---
@@ -234,7 +244,7 @@ flowchart LR
 
 ---
 
-#### `jobs`
+#### `projects`
 | Column | Type | Purpose |
 |--------|------|---------|
 | id | uuid | Primary key |
@@ -250,7 +260,7 @@ flowchart LR
 | etl_source | text | ETL source (hf_loader, freelancer_scheduler, etc.) |
 | posted_at | timestamptz | When job was posted |
 
-**Purpose:** Central job catalog. Fed by ETL (HF, Freelancer). Projects UI reads from here when `ETL_USE_PERSISTENCE=true`.
+**Purpose:** Central project catalog (renamed from jobs). Fed by ETL (HF, Freelancer). Projects UI reads from here when `ETL_USE_PERSISTENCE=true`.
 
 ---
 
@@ -270,14 +280,14 @@ flowchart LR
 
 ---
 
-#### `user_job_status`
+#### `user_project_status`
 | Column | Type | Purpose |
 |--------|------|---------|
 | user_id | uuid | FK → users |
-| job_id | uuid | FK → jobs |
+| project_id | uuid | FK → projects |
 | status | varchar | new, reviewed, applied, rejected |
 
-**Purpose:** Per-user status on each job (e.g., "applied" when user submits proposal).
+**Purpose:** Per-user status on each project (e.g., "applied" when user submits proposal).
 
 ---
 
@@ -301,28 +311,13 @@ flowchart LR
 | Column | Type | Purpose |
 |--------|------|---------|
 | user_id | uuid | FK → users |
-| job_id | uuid | FK → jobs |
+| project_id | uuid | FK → projects |
 | strategy_id | uuid | FK → bidding_strategies |
 | title, description | text | Proposal content |
 | status | varchar | draft, sent, won, lost |
 | generated_with_ai | boolean | AI-generated flag |
 
-**Purpose:** Proposals created for jobs, optionally using a strategy.
-
----
-
-#### `bids`
-| Column | Type | Purpose |
-|--------|------|---------|
-| project_id | uuid | FK → projects |
-| user_id | uuid | FK → users |
-| strategy_id | uuid | FK → bidding_strategies |
-| proposal, cover_letter | text | Bid content |
-| bid_amount | numeric | Proposed price |
-| ai_generated | boolean | AI-generated flag |
-| status | varchar | draft, submitted, won, lost |
-
-**Purpose:** Bid submissions for projects (may align with proposals in future).
+**Purpose:** Proposals created for projects, optionally using a strategy.
 
 ---
 
@@ -331,7 +326,6 @@ flowchart LR
 | Table | Purpose |
 |-------|---------|
 | **keywords** | User search keywords; `jobs_matched`, `last_match_at` for tracking |
-| **projects** | User-saved projects (alternate to jobs; may be legacy) |
 | **knowledge_base_documents** | Uploaded docs for RAG; `chroma_collection_name`, `chunk_count` |
 | **draft_work** | Auto-saved drafts; `entity_type` + `entity_id` polymorphic |
 | **user_session_states** | Session context; `active_feature`, `navigation_history`, `filters` |
@@ -360,10 +354,10 @@ flowchart TB
         FL_Script[scripts/freelancer_etl.py]
     end
 
-    HF_Job --> jobs
-    FL_Job --> jobs
-    HF_Script --> jobs
-    FL_Script --> jobs
+    HF_Job --> projects
+    FL_Job --> projects
+    HF_Script --> projects
+    FL_Script --> projects
 ```
 
 ---
@@ -376,14 +370,10 @@ flowchart TB
 | keywords | users | user_id |
 | bidding_strategies | users | user_id |
 | proposals | users | user_id |
-| proposals | jobs | job_id |
+| proposals | projects | project_id |
 | proposals | bidding_strategies | strategy_id |
-| bids | projects | project_id |
-| bids | users | user_id |
-| bids | bidding_strategies | strategy_id |
-| user_job_status | users | user_id |
-| user_job_status | jobs | job_id |
-| projects | users | user_id |
+| user_project_status | users | user_id |
+| user_project_status | projects | project_id |
 | knowledge_base_documents | users | user_id |
 | draft_work | users | user_id |
 | user_session_states | users | user_id |
@@ -391,6 +381,8 @@ flowchart TB
 | platform_credentials | users | user_id |
 | workflow_analytics | users | user_id |
 | analytics_events | users | user_id |
+
+**Removed (005-refactor):** bids, legacy projects. **Note:** projects has no user_id (ETL-sourced).
 
 ---
 

@@ -151,9 +151,9 @@ async def upsert_user_job_qualification(
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO user_job_qualifications (user_id, job_id, qualification_score, qualification_reason)
+            INSERT INTO user_project_qualifications (user_id, project_id, qualification_score, qualification_reason)
             VALUES ($1::uuid, $2::uuid, $3, $4)
-            ON CONFLICT (user_id, job_id) DO UPDATE SET
+            ON CONFLICT (user_id, project_id) DO UPDATE SET
                 qualification_score = EXCLUDED.qualification_score,
                 qualification_reason = EXCLUDED.qualification_reason
             """,

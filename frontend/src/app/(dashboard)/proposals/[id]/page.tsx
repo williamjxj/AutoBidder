@@ -170,7 +170,7 @@ export default function ProposalDetailPage() {
                   <div>
                     <h4 className="text-sm font-medium mb-2">Suggestions</h4>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                      {quality.suggestions.map((s, i) => (
+                      {quality.suggestions.map((s: string, i: number) => (
                         <li key={i}>{s}</li>
                       ))}
                     </ul>

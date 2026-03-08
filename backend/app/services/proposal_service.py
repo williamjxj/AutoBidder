@@ -17,7 +17,7 @@ def _row_to_proposal(row: dict) -> Proposal:
     return Proposal(
         id=str(row["id"]),
         user_id=str(row["user_id"]),
-        job_id=str(row["job_id"]) if row.get("job_id") else None,
+        job_id=str(row["project_id"]) if row.get("project_id") else None,
         title=row["title"],
         description=row["description"],
         budget=row["budget"],
@@ -115,7 +115,7 @@ async def create_proposal(
         """
         INSERT INTO proposals (
             user_id, title, description, budget, timeline, skills,
-            job_id, job_url, job_platform, client_name, strategy_id,
+            project_id, job_url, job_platform, client_name, strategy_id,
             generated_with_ai, ai_model_used, status
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -167,7 +167,7 @@ async def create_auto_generated_proposal(
         row = await conn.fetchrow(
             """
             INSERT INTO proposals (
-                user_id, job_id, title, description, budget, timeline, skills,
+                user_id, project_id, title, description, budget, timeline, skills,
                 job_url, job_platform, client_name, strategy_id,
                 generated_with_ai, ai_model_used, status, source, auto_generated_at,
                 quality_score, quality_breakdown, quality_suggestions
@@ -234,7 +234,7 @@ async def update_proposal(
         param_idx += 1
 
     if proposal_data.job_id is not None:
-        update_fields.append(f"job_id = ${param_idx}")
+        update_fields.append(f"project_id = ${param_idx}")
         params.append(UUID(proposal_data.job_id) if proposal_data.job_id else None)
         param_idx += 1
     

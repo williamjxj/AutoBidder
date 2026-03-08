@@ -34,7 +34,7 @@ dependencies = [
 [tool.uv]
 dev-dependencies = [
     "pytest>=8",
-    "pytest-asyncio>=0.23",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=4",
     "ruff>=0.1",
     "black>=24",

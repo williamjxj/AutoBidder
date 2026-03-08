@@ -44,7 +44,7 @@ async def run_autonomous_pipeline_and_record(user_id: str, run_id: str) -> None:
             status="failed",
             errors=[str(e)],
         )
-from app.services.job_service import get_jobs_by_fingerprints, upsert_jobs
+from app.services.project_service import get_jobs_by_fingerprints, upsert_jobs
 from app.services.keyword_service import keyword_service
 from app.services.auto_proposal_service import auto_generate_proposals
 from app.services.notification_service import get_user_email, notify_qualified_jobs
@@ -74,7 +74,7 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
         Dict with jobs_discovered, jobs_qualified, proposals_generated, notifications_sent
 
     Raises:
-        Exception: Propagates from hf_loader or job_service
+        Exception: Propagates from hf_loader or project_service
     """
     # Get user keywords
     keywords: List[str] = []

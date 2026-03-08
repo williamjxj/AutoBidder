@@ -6,8 +6,8 @@
 
 'use client'
 
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
 import { demoUserConfig } from '@/lib/config/demo-user'
@@ -15,13 +15,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
-  const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') ?? '/dashboard'
 
@@ -155,5 +154,24 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+function LoginFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950">
+      <div className="w-full max-w-md animate-pulse space-y-8">
+        <div className="h-24 rounded-lg bg-slate-200 dark:bg-slate-800" />
+        <div className="h-64 rounded-lg border bg-card p-8" />
+      </div>
+    </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   )
 }

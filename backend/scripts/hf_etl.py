@@ -108,7 +108,7 @@ async def main() -> None:
         print(f"Saved to {args.output}")
 
     if not args.no_db and os.getenv("DATABASE_URL"):
-        from app.services.job_service import record_etl_run, upsert_jobs
+        from app.services.project_service import record_etl_run, upsert_jobs
 
         started = datetime.now(timezone.utc)
         inserted, updated = 0, 0
