@@ -110,7 +110,22 @@ async def create_proposal(
 ) -> Proposal:
     """Create a new proposal."""
     db = await get_db_pool()
-    
+
+    # Resolve project_id: only link if job exists in projects (avoids FK violation
+    # when job_id comes from Discover results not persisted to DB)
+    project_id_val = None
+    if proposal_data.job_id:
+        try:
+            pid = UUID(proposal_data.job_id)
+            exists = await db.fetchval(
+                "SELECT 1 FROM projects WHERE id = $1",
+                pid,
+            )
+            if exists:
+                project_id_val = pid
+        except (ValueError, TypeError):
+            pass
+
     row = await db.fetchrow(
         """
         INSERT INTO proposals (
@@ -127,7 +142,7 @@ async def create_proposal(
         proposal_data.budget,
         proposal_data.timeline,
         proposal_data.skills,
-        UUID(proposal_data.job_id) if proposal_data.job_id else None,
+        project_id_val,
         proposal_data.job_url,
         proposal_data.job_platform,
         proposal_data.client_name,
@@ -136,8 +151,26 @@ async def create_proposal(
         proposal_data.ai_model_used,
         proposal_data.status or "draft",
     )
-    
-    return _row_to_proposal(dict(row))
+
+    proposal = _row_to_proposal(dict(row))
+
+    # When submitted, send formal HTML proposal to customer email
+    if proposal_data.status == "submitted":
+        try:
+            from app.config import settings
+            from app.services.notification_service import send_proposal_submission_email
+
+            await send_proposal_submission_email(
+                settings.proposal_submit_email, proposal
+            )
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Failed to send proposal submission email: %s", e
+            )
+
+    return proposal
 
 
 async def create_auto_generated_proposal(

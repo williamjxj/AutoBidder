@@ -14,7 +14,7 @@ sqlalchemy[asyncio]==2.0.25
 psycopg2-binary==2.9.9
 
 # Vector Database and RAG
-chromadb==0.4.22  # Compatible with existing data (local mode)
+chromadb>=0.5.0  # Compatible with existing data (local mode)
 langchain>=0.2.0
 langchain-community>=0.2.0
 langchain-openai>=0.1.0
@@ -46,7 +46,7 @@ pandas>=2.0.0
 apscheduler>=3.10.0
 
 # Notifications (004-improve-autonomous)
-sendgrid>=6.11.0
+resend>=2.0.0
 
 # Utilities
 python-dotenv==1.0.1

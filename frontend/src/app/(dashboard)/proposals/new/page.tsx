@@ -252,6 +252,7 @@ function NewProposalPageContent() {
         budget: formData.budget?.trim() || undefined,
         timeline: formData.timeline?.trim() || undefined,
         skills: skillsArr,
+        job_id: jobContext?.id,
         job_platform: jobContext?.platform,
         client_name: jobContext?.company,
         strategy_id: selectedStrategyId || undefined,
