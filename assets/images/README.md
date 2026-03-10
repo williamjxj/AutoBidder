@@ -4,8 +4,14 @@ This directory contains visual assets (screenshots, images, icons) for the Auto 
 
 ## 📁 Current Files
 
-- `dashboard.png` - Main dashboard screenshot
-- `analytics.png` - Analytics and metrics dashboard screenshot
+- `dashboard.png` - Main dashboard overview with key metrics and statistics
+- `projects.png` - Projects listing and management page
+- `proposals.png` - Proposals management and tracking page
+- `knowledge-base.png` - Knowledge base management interface
+- `strategies.png` - AI strategies configuration page
+- `keywords.png` - Keywords management for project filtering
+- `analytics.png` - Analytics and metrics dashboard
+- `settings.png` - Application settings and configuration
 
 ## 📸 Adding New Screenshots
 

@@ -101,7 +101,6 @@ openssl rand -hex 32
 - Custom `users` table in PostgreSQL
 - JWT issued by FastAPI at `/api/auth/login`
 - Frontend stores token in localStorage; sends `Authorization: Bearer <token>`
-- No Supabase dependencies
 
 ---
 

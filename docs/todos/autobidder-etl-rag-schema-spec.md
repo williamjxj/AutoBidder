@@ -143,7 +143,7 @@ async def load_and_filter_hf_datasets():
            ↓                               ↓
    ┌───────────────┐               ┌───────────────┐
    │  PostgreSQL    │               │  ChromaDB      │
-   │  (Supabase)    │               │  (RAG Index)   │
+   │                │               │  (RAG Index)   │
    │                │               │                │
    │  jobs table    │               │  jobs collection│
    │  raw metadata  │               │  + embeddings  │
