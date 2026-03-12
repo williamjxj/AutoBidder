@@ -14,22 +14,20 @@ Routes:
 - GET  /api/projects/stats - Get project statistics
 """
 
+import logging
 import os
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-import logging
 
 from ..config import settings
 from ..models.auth import UserResponse
 from ..routers.auth import get_current_user
 from ..models.project import (
-    ProjectDiscoverRequest,
-    ProjectDiscoverResponse,
     Project,
     ProjectCreate,
-    ProjectFilters,
-    ProjectStats,
+    ProjectDiscoverRequest,
+    ProjectDiscoverResponse,
     ProjectListResponse
 )
 from ..services.hf_job_source import fetch_hf_jobs, get_available_datasets
@@ -621,147 +619,3 @@ async def health_check():
     }
 
 
-@router.post("/score/trigger")
-async def trigger_project_scoring(
-    force: bool = Query(False, description="Force recalculation of all scores"),
-    limit: int = Query(100, ge=1, le=500, description="Max projects to score"),
-    current_user: UserResponse = Depends(get_current_user)
-):
-    """
-    Trigger project scoring for current user.
-    Runs in background and returns immediately.
-
-    Args:
-        force: Recalculate all scores, ignore cache
-        limit: Maximum projects to score
-        current_user: Current authenticated user
-
-    Returns:
-        Task status confirmation
-
-    Example:
-        POST /api/projects/score/trigger?force=true&limit=100
-    """
-    from ..tasks.scoring_tasks import score_all_projects_for_user
-    import asyncio
-
-    logger.info(
-        f"User {current_user.email} triggered project scoring "
-        f"(force={force}, limit={limit})"
-    )
-
-    # Queue background task (don't await)
-    asyncio.create_task(
-        score_all_projects_for_user(
-            user_id=str(current_user.id),
-            force_recalculate=force,
-            limit=limit
-        )
-    )
-
-    return {
-        "success": True,
-        "message": "Project scoring started in background",
-        "user_id": str(current_user.id),
-        "force": force,
-        "limit": limit
-    }
-
-
-@router.get("/score/status")
-async def get_scoring_status(
-    current_user: UserResponse = Depends(get_current_user)
-):
-    """
-    Get project scoring status for current user.
-    Shows how many projects have been scored.
-
-    Args:
-        current_user: Current authenticated user
-
-    Returns:
-        Scoring statistics
-
-    Example:
-        GET /api/projects/score/status
-    """
-    from ..core.database import get_db_pool
-
-    pool = await get_db_pool()
-
-    try:
-        # Get total projects
-        total_projects = await pool.fetchval(
-            "SELECT COUNT(*)::int FROM projects"
-        )
-
-        # Get scored projects for user
-        scored_count = await pool.fetchval(
-            """
-            SELECT COUNT(*)::int
-            FROM user_project_qualifications
-            WHERE user_id = $1::uuid
-            """,
-            str(current_user.id)
-        )
-
-        # Get score distribution
-        score_distribution = await pool.fetch(
-            """
-            SELECT
-                CASE
-                    WHEN qualification_score >= 90 THEN 'excellent'
-                    WHEN qualification_score >= 70 THEN 'good'
-                    WHEN qualification_score >= 50 THEN 'fair'
-                    ELSE 'low'
-                END as score_range,
-                COUNT(*)::int as count
-            FROM user_project_qualifications
-            WHERE user_id = $1::uuid
-            GROUP BY score_range
-            ORDER BY
-                CASE score_range
-                    WHEN 'excellent' THEN 1
-                    WHEN 'good' THEN 2
-                    WHEN 'fair' THEN 3
-                    ELSE 4
-                END
-            """,
-            str(current_user.id)
-        )
-
-        distribution = {row['score_range']: row['count'] for row in score_distribution}
-
-        # Get recently scored projects
-        recent = await pool.fetch(
-            """
-            SELECT p.title, upq.qualification_score, upq.updated_at
-            FROM user_project_qualifications upq
-            JOIN projects p ON p.id = upq.project_id
-            WHERE upq.user_id = $1::uuid
-            ORDER BY upq.updated_at DESC
-            LIMIT 5
-            """,
-            str(current_user.id)
-        )
-
-        recent_scores = [
-            {
-                "title": r['title'],
-                "score": float(r['qualification_score']),
-                "updated_at": r['updated_at'].isoformat()
-            }
-            for r in recent
-        ]
-
-        return {
-            "total_projects": total_projects,
-            "scored_projects": scored_count,
-            "unscored_projects": total_projects - scored_count,
-            "score_distribution": distribution,
-            "recent_scores": recent_scores
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get scoring status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

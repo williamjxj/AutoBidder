@@ -2,7 +2,7 @@
 Integration tests for autonomous discovery pipeline.
 
 Per specs/004-improve-autonomous/tasks.md T044.
-Tests discovery → qualification → notification → auto-generate flow via API.
+Tests discovery pipeline via API.
 """
 
 from __future__ import annotations
@@ -93,7 +93,6 @@ async def test_autonomous_settings_returns_defaults_when_authenticated(
             data = response.json()
             assert "auto_discovery_enabled" in data
             assert "autonomy_level" in data
-            assert "qualification_threshold" in data
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

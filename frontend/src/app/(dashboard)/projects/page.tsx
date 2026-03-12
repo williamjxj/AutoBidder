@@ -541,29 +541,6 @@ function ProjectCard({
                   Applied
                 </Badge>
               )}
-              {/* Match Score Badge */}
-              {project.qualification_score !== undefined && project.qualification_score !== null && (
-                <Badge
-                  variant={
-                    project.qualification_score >= 90 ? 'default' :
-                    project.qualification_score >= 70 ? 'secondary' :
-                    'outline'
-                  }
-                  className={cn(
-                    'shrink-0 font-semibold',
-                    project.qualification_score >= 90 && 'bg-green-600 hover:bg-green-700 text-white',
-                    project.qualification_score >= 70 && project.qualification_score < 90 && 'bg-blue-600 hover:bg-blue-700 text-white',
-                    project.qualification_score >= 50 && project.qualification_score < 70 && 'border-yellow-500 text-yellow-700 dark:text-yellow-400',
-                    project.qualification_score < 50 && 'border-gray-400 text-gray-600 dark:text-gray-400'
-                  )}
-                  title={`Match score based on your keywords and skills`}
-                >
-                  {project.qualification_score >= 90 && '⭐⭐⭐ '}
-                  {project.qualification_score >= 70 && project.qualification_score < 90 && '⭐⭐ '}
-                  {project.qualification_score >= 50 && project.qualification_score < 70 && '⭐ '}
-                  {Math.round(project.qualification_score)}% Match
-                </Badge>
-              )}
               <Badge variant="secondary" className="uppercase shrink-0">
                 {project.platform}
               </Badge>

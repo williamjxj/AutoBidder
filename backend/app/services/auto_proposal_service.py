@@ -1,8 +1,8 @@
 """
 Auto-Proposal Service
 
-Auto-generates proposal drafts for high-confidence job matches.
-Per specs/004-improve-autonomous, docs/quick-wins-autonomous.md.
+Auto-generates proposal drafts for discovered job matches.
+Per specs/004-improve-autonomous.
 """
 
 import logging
@@ -19,33 +19,24 @@ logger = logging.getLogger(__name__)
 
 async def auto_generate_proposals(
     user_id: str,
-    qualified_jobs: List[Dict[str, Any]],
-    threshold: float = 0.85,
+    jobs: List[Dict[str, Any]],
+    limit: int = 5,
 ) -> int:
     """
-    Generate proposal drafts for jobs above threshold.
+    Generate proposal drafts for discovered jobs.
 
     Uses ai_service.generate_proposal per job, persists with source='auto_generated'.
     Uses user's default bidding_strategy from settings (T028).
 
     Args:
         user_id: User UUID
-        qualified_jobs: List of job dicts with qualification_score, title, description, skills, id, etc.
-        threshold: Minimum score to auto-generate (default 0.85)
+        jobs: List of job dicts with title, description, skills, id, etc.
+        limit: Maximum number of proposals to generate (default 5)
 
     Returns:
         Number of proposals created
     """
-    above_threshold = [
-        j for j in qualified_jobs
-        if (j.get("qualification_score") or 0) >= threshold
-    ]
-    if not above_threshold:
-        logger.debug(
-            "No jobs above auto_generate threshold %.2f for user %s",
-            threshold,
-            user_id,
-        )
+    if not jobs:
         return 0
 
     if not ai_service.chat_model:
@@ -66,7 +57,7 @@ async def auto_generate_proposals(
     created = 0
     user_uuid = UUID(user_id)
 
-    for job in above_threshold:
+    for job in jobs[:limit]:
         try:
             request = ProposalGenerateRequest(
                 job_id=job.get("id"),

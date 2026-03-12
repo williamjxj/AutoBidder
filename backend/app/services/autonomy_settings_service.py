@@ -2,7 +2,7 @@
 Autonomy Settings Service
 
 Reads and writes user autonomy preferences from user_profiles.
-Supports auto-discovery, qualification, notifications, and auto-generation settings.
+Supports auto-discovery, notifications, and auto-generation settings.
 """
 
 from typing import Optional
@@ -13,7 +13,6 @@ from app.models.autonomy import AutonomousSettings, AutonomousSettingsUpdate
 # Default values matching data-model.md
 DEFAULT_AUTO_DISCOVERY_ENABLED = False
 DEFAULT_DISCOVERY_INTERVAL_MINUTES = 15
-DEFAULT_QUALIFICATION_THRESHOLD = 0.60
 DEFAULT_NOTIFICATION_THRESHOLD = 0.80
 DEFAULT_NOTIFICATIONS_ENABLED = True
 DEFAULT_AUTO_GENERATE_ENABLED = False
@@ -38,19 +37,17 @@ async def get_autonomy_settings(user_id: str) -> AutonomousSettings:
             SELECT
                 COALESCE(auto_discovery_enabled, $2) AS auto_discovery_enabled,
                 COALESCE(discovery_interval_minutes, $3) AS discovery_interval_minutes,
-                COALESCE(qualification_threshold, $4) AS qualification_threshold,
-                COALESCE(notification_threshold, $5) AS notification_threshold,
-                COALESCE(notifications_enabled, $6) AS notifications_enabled,
-                COALESCE(auto_generate_enabled, $7) AS auto_generate_enabled,
-                COALESCE(auto_generate_threshold, $8) AS auto_generate_threshold,
-                COALESCE(autonomy_level, $9) AS autonomy_level
+                COALESCE(notification_threshold, $4) AS notification_threshold,
+                COALESCE(notifications_enabled, $5) AS notifications_enabled,
+                COALESCE(auto_generate_enabled, $6) AS auto_generate_enabled,
+                COALESCE(auto_generate_threshold, $7) AS auto_generate_threshold,
+                COALESCE(autonomy_level, $8) AS autonomy_level
             FROM user_profiles
             WHERE user_id = $1
             """,
             user_id,
             DEFAULT_AUTO_DISCOVERY_ENABLED,
             DEFAULT_DISCOVERY_INTERVAL_MINUTES,
-            float(DEFAULT_QUALIFICATION_THRESHOLD),
             float(DEFAULT_NOTIFICATION_THRESHOLD),
             DEFAULT_NOTIFICATIONS_ENABLED,
             DEFAULT_AUTO_GENERATE_ENABLED,
@@ -62,7 +59,6 @@ async def get_autonomy_settings(user_id: str) -> AutonomousSettings:
         return AutonomousSettings(
             auto_discovery_enabled=DEFAULT_AUTO_DISCOVERY_ENABLED,
             discovery_interval_minutes=DEFAULT_DISCOVERY_INTERVAL_MINUTES,
-            qualification_threshold=DEFAULT_QUALIFICATION_THRESHOLD,
             notification_threshold=DEFAULT_NOTIFICATION_THRESHOLD,
             notifications_enabled=DEFAULT_NOTIFICATIONS_ENABLED,
             auto_generate_enabled=DEFAULT_AUTO_GENERATE_ENABLED,
@@ -73,7 +69,6 @@ async def get_autonomy_settings(user_id: str) -> AutonomousSettings:
     return AutonomousSettings(
         auto_discovery_enabled=bool(row["auto_discovery_enabled"]),
         discovery_interval_minutes=int(row["discovery_interval_minutes"]),
-        qualification_threshold=float(row["qualification_threshold"]),
         notification_threshold=float(row["notification_threshold"]),
         notifications_enabled=bool(row["notifications_enabled"]),
         auto_generate_enabled=bool(row["auto_generate_enabled"]),
@@ -109,10 +104,6 @@ async def update_autonomy_settings(
     if update.discovery_interval_minutes is not None:
         updates.append(f"discovery_interval_minutes = ${idx}")
         params.append(update.discovery_interval_minutes)
-        idx += 1
-    if update.qualification_threshold is not None:
-        updates.append(f"qualification_threshold = ${idx}")
-        params.append(update.qualification_threshold)
         idx += 1
     if update.notification_threshold is not None:
         updates.append(f"notification_threshold = ${idx}")

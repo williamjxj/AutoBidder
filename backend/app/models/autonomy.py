@@ -22,12 +22,6 @@ class AutonomousSettings(BaseModel):
         le=1440,
         description="Minutes between discovery runs",
     )
-    qualification_threshold: float = Field(
-        default=0.6,
-        ge=0.0,
-        le=1.0,
-        description="Min score (0-1) for job to appear as qualified",
-    )
     notification_threshold: float = Field(
         default=0.8,
         ge=0.0,
@@ -87,7 +81,6 @@ class AutonomousSettingsUpdate(BaseModel):
 
     auto_discovery_enabled: Optional[bool] = None
     discovery_interval_minutes: Optional[int] = Field(None, ge=5, le=1440)
-    qualification_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     notification_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     notifications_enabled: Optional[bool] = None
     auto_generate_enabled: Optional[bool] = None

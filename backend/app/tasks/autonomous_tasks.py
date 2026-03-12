@@ -3,7 +3,7 @@ Autonomous Discovery Tasks
 
 Background jobs for autonomous job discovery per user.
 Per specs/004-improve-autonomous/tasks.md Phase 3–5.
-Discovery → qualification → notification pipeline.
+Discovery pipeline.
 """
 
 import logging
@@ -16,42 +16,9 @@ from app.services.autonomy_settings_service import (
     get_autonomy_settings,
     record_autonomous_run,
 )
-
-
-async def run_autonomous_pipeline_and_record(user_id: str, run_id: str) -> None:
-    """
-    Run discovery pipeline and record results for an existing run (T041).
-
-    Used by POST /api/autonomous/run: create run first, return run_id, then
-    this runs in background.
-    """
-    try:
-        result = await run_autonomous_discovery_for_user(user_id)
-        await record_autonomous_run(
-            user_id,
-            run_id,
-            jobs_discovered=result.get("jobs_discovered", 0),
-            jobs_qualified=result.get("jobs_qualified", 0),
-            proposals_generated=result.get("proposals_generated", 0),
-            notifications_sent=result.get("notifications_sent", 0),
-            status="success",
-        )
-    except Exception as e:
-        logger.exception("Autonomous pipeline failed for user %s: %s", user_id, e)
-        await record_autonomous_run(
-            user_id,
-            run_id,
-            status="failed",
-            errors=[str(e)],
-        )
-from app.services.project_service import get_jobs_by_fingerprints, upsert_jobs
+from app.services.project_service import upsert_jobs
 from app.services.keyword_service import keyword_service
 from app.services.auto_proposal_service import auto_generate_proposals
-from app.services.notification_service import get_user_email, notify_qualified_jobs
-from app.services.qualification_service import (
-    score_and_filter_jobs,
-    upsert_user_job_qualification,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +29,10 @@ HF_JOB_LIMIT = 20
 
 async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
     """
-    Discover jobs for a single user, upsert to database, and run qualification.
+    Discover jobs for a single user and upsert to database.
 
     Fetches user's keywords, loads jobs from HuggingFace, applies domain filter,
-    upserts to jobs table, then scores and persists qualification for discovered jobs.
+    upserts to jobs table.
 
     Args:
         user_id: User UUID
@@ -114,100 +81,41 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
         updated,
     )
 
-    jobs_qualified = 0
     proposals_generated = 0
-    notifications_sent = 0
 
-    # T035: autonomy_level behavior - discovery_only/assisted = discovery only
+    # Auto-proposal generation (if enabled)
     try:
         settings_obj = await get_autonomy_settings(user_id)
         level = (settings_obj.autonomy_level or "assisted").lower()
         if level in ("discovery_only", "assisted"):
             logger.info(
-                "User %s: autonomy_level=%s; skipping qualification/notification/auto-gen",
+                "User %s: autonomy_level=%s; skipping auto-generation",
                 user_id,
                 level,
             )
-            return {
-                "jobs_discovered": total,
-                "jobs_qualified": 0,
-                "proposals_generated": 0,
-                "notifications_sent": 0,
-            }
-
-        fingerprints = [r.fingerprint_hash for r in records]
-        jobs = await get_jobs_by_fingerprints(fingerprints, user_id=None)
-        if jobs:
-            min_score = float(settings_obj.qualification_threshold)
-            qualified = await score_and_filter_jobs(user_id, jobs, min_score=min_score)
-            jobs_qualified = len(qualified)
-            for q in qualified:
-                await upsert_user_job_qualification(
-                    user_id,
-                    q["id"],
-                    q["qualification_score"],
-                    q.get("qualification_reason"),
-                )
-            logger.info(
-                "User %s: qualified %d/%d jobs (threshold=%.2f)",
-                user_id,
-                jobs_qualified,
-                len(jobs),
-                min_score,
-            )
-
-            # Notification (T023): email when high-quality jobs found
-            if qualified and settings_obj.notifications_enabled:
+        elif settings_obj.auto_generate_enabled and records:
+            from app.services.project_service import get_jobs_by_fingerprints
+            fingerprints = [r.fingerprint_hash for r in records]
+            jobs = await get_jobs_by_fingerprints(fingerprints, user_id=None)
+            if jobs:
                 try:
-                    user_email = await get_user_email(user_id)
-                    if user_email:
-                        notif_threshold = float(settings_obj.notification_threshold)
-                        notifications_sent = await notify_qualified_jobs(
-                            user_email,
-                            qualified,
-                            threshold=notif_threshold,
-                        )
-                        if notifications_sent:
-                            logger.info(
-                                "User %s: notification sent for %d jobs (threshold=%.2f)",
-                                user_id,
-                                notifications_sent,
-                                notif_threshold,
-                            )
-                except Exception as ne:
-                    logger.warning(
-                        "Notification failed for user %s (qualification succeeded): %s",
-                        user_id,
-                        ne,
-                        exc_info=True,
-                    )
-
-            # Auto-proposal (T027): generate drafts for high-confidence jobs
-            if qualified and settings_obj.auto_generate_enabled:
-                try:
-                    gen_threshold = float(settings_obj.auto_generate_threshold)
-                    proposals_generated = await auto_generate_proposals(
-                        user_id,
-                        qualified,
-                        threshold=gen_threshold,
-                    )
+                    proposals_generated = await auto_generate_proposals(user_id, jobs)
                     if proposals_generated:
                         logger.info(
-                            "User %s: auto-generated %d proposals (threshold=%.2f)",
+                            "User %s: auto-generated %d proposals",
                             user_id,
                             proposals_generated,
-                            gen_threshold,
                         )
                 except Exception as ae:
                     logger.warning(
-                        "Auto-generation failed for user %s (qualification succeeded): %s",
+                        "Auto-generation failed for user %s: %s",
                         user_id,
                         ae,
                         exc_info=True,
                     )
     except Exception as e:
         logger.warning(
-            "Qualification failed for user %s (discovery succeeded): %s",
+            "Settings lookup failed for user %s: %s",
             user_id,
             e,
             exc_info=True,
@@ -215,9 +123,9 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
 
     return {
         "jobs_discovered": total,
-        "jobs_qualified": jobs_qualified,
+        "jobs_qualified": 0,
         "proposals_generated": proposals_generated,
-        "notifications_sent": notifications_sent,
+        "notifications_sent": 0,
     }
 
 

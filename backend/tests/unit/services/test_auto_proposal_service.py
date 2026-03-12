@@ -35,13 +35,12 @@ async def test_auto_generate_proposals_returns_zero_when_no_llm() -> None:
         jobs = [
             {
                 "id": str(uuid4()),
-                "qualification_score": 0.9,
                 "title": "Test Job",
                 "description": "Desc",
                 "skills": ["python"],
             }
         ]
-        count = await auto_generate_proposals(TEST_USER_ID, jobs, threshold=0.85)
+        count = await auto_generate_proposals(TEST_USER_ID, jobs)
         assert count == 0
     finally:
         ai_service.chat_model = original
@@ -49,15 +48,15 @@ async def test_auto_generate_proposals_returns_zero_when_no_llm() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_auto_generate_proposals_filters_by_threshold() -> None:
-    """auto_generate_proposals only processes jobs above threshold."""
+async def test_auto_generate_proposals_processes_jobs() -> None:
+    """auto_generate_proposals processes all provided jobs up to limit."""
     from app.services.ai_service import ai_service
 
     user_id = str(uuid4())
     project_id = str(uuid4())
     jobs = [
-        {"id": project_id, "qualification_score": 0.9, "title": "High", "description": "", "skills": []},
-        {"id": str(uuid4()), "qualification_score": 0.7, "title": "Low", "description": "", "skills": []},
+        {"id": project_id, "title": "Job 1", "description": "", "skills": []},
+        {"id": str(uuid4()), "title": "Job 2", "description": "", "skills": []},
     ]
     ai_service.chat_model = MagicMock()
     ai_service.chat_model.ainvoke = AsyncMock(return_value=MagicMock(content="Proposal text"))
@@ -84,6 +83,6 @@ async def test_auto_generate_proposals_filters_by_threshold() -> None:
         mock_settings.get_settings = AsyncMock(
             return_value=MagicMock(preferences=MagicMock(default_strategy_id=None))
         )
-        count = await auto_generate_proposals(TEST_USER_ID, jobs, threshold=0.85)
+        count = await auto_generate_proposals(TEST_USER_ID, jobs)
 
-    assert count == 1
+    assert count == 2

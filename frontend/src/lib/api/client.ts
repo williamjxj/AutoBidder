@@ -889,8 +889,6 @@ export interface Project {
   status?: string
   test_email?: string
   model_response?: string  // Structured job analysis (Core Responsibilities, Required Skills, etc.)
-  qualification_score?: number  // Match score 0-100 based on keywords/skills
-  qualification_reason?: string  // JSON breakdown of score components
 }
 
 export interface ProjectDiscoverResponse {
@@ -1032,38 +1030,6 @@ export async function updateProjectStatus(
   const { data } = await apiClient.put<Project>(
     `${backend}/api/projects/${projectId}/status`,
     { status }
-  )
-  return data
-}
-
-/**
- * Trigger project scoring for current user
- */
-export async function triggerProjectScoring(
-  force: boolean = false,
-  limit: number = 100
-): Promise<{ success: boolean; message: string } | null> {
-  const backend = getBackendUrl()
-  const { data } = await apiClient.post<{ success: boolean; message: string }>(
-    `${backend}/api/projects/score/trigger?force=${force}&limit=${limit}`,
-    {}
-  )
-  return data
-}
-
-/**
- * Get project scoring status
- */
-export async function getProjectScoringStatus(): Promise<{
-  total_projects: number
-  scored_projects: number
-  unscored_projects: number
-  score_distribution: Record<string, number>
-  recent_scores: Array<{ title: string; score: number; updated_at: string }>
-} | null> {
-  const backend = getBackendUrl()
-  const { data } = await apiClient.get(
-    `${backend}/api/projects/score/status`
   )
   return data
 }

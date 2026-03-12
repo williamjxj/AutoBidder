@@ -201,16 +201,6 @@ async def list_projects(
     )
     if user_id is not None:
         select_cols += ", ups.status AS user_status"
-        # Optional: join user_project_qualifications if table exists (migration 010)
-        try:
-            exists = await pool.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_project_qualifications')"
-            )
-            if exists and user_id_param_idx is not None:
-                select_cols += ", upq.qualification_score, upq.qualification_reason"
-                join_clause += f" LEFT JOIN user_project_qualifications upq ON upq.project_id = p.id AND upq.user_id = ${user_id_param_idx}::uuid"
-        except Exception:
-            pass
 
     count_sql = f"SELECT COUNT(*)::int FROM projects p{join_clause} WHERE {where_clause}"
     total = await pool.fetchval(count_sql, *params)
@@ -231,7 +221,6 @@ async def list_projects(
         _row_to_project_dict(
             r,
             use_user_status=user_id is not None,
-            include_qualification=user_id is not None,
         )
         for r in rows
     ]
@@ -243,7 +232,7 @@ list_jobs = list_projects
 
 
 def _row_to_project_dict(
-    row: Any, use_user_status: bool = False, include_qualification: bool = False
+    row: Any, use_user_status: bool = False
 ) -> Dict[str, Any]:
     """Convert DB row to API response shape."""
     status = "new"
@@ -282,9 +271,6 @@ def _row_to_project_dict(
         "test_email": row.get("test_email"),
         "model_response": model_response,  # AI-generated analysis from HuggingFace dataset
     }
-    if include_qualification and row.get("qualification_score") is not None:
-        d["qualification_score"] = float(row["qualification_score"])
-        d["qualification_reason"] = row.get("qualification_reason")
     return d
 
 
