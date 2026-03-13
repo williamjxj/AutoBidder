@@ -88,7 +88,7 @@ def _send_resend_email(
 
 def _build_signature_html(profile: UserProfile, proposal: Any) -> str:
     """
-    Build HTML signature from user profile with improved styling.
+    Build HTML signature from user profile as a clean plain-list style.
 
     Args:
         profile: UserProfile with contact information
@@ -97,127 +97,35 @@ def _build_signature_html(profile: UserProfile, proposal: Any) -> str:
     Returns:
         HTML string for email signature
     """
-    # Build optional contact rows with improved styling
-    linkedin_row = f'''<tr>
-        <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-          <strong style="color: #2c5282;">💼 LinkedIn</strong>
-        </td>
-        <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-          <a href="{html.escape(profile.linkedin)}" target="_blank" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">{html.escape(profile.linkedin.replace('https://', '').replace('www.', ''))}</a>
-        </td>
-      </tr>''' if profile.linkedin else ''
+    # Use settings as reliable fallback for name, linkedin, github
+    display_name = settings.user_full_name or profile.full_name
+    linkedin_url = profile.linkedin or 'https://www.linkedin.com/in/william-jiang-226a7616/'
+    github_url = profile.github or 'https://williamjxj.github.io/'
 
-    github_row = f'''<tr>
-        <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-          <strong style="color: #2c5282;">💻 GitHub</strong>
-        </td>
-        <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-          <a href="{html.escape(profile.github)}" target="_blank" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">{html.escape(profile.github.replace('https://', '').replace('www.', ''))}</a>
-        </td>
-      </tr>''' if profile.github else ''
+    phone_line = f'<p style="margin: 4px 0; color: #2d3748; font-size: 0.95em;">📞 {html.escape(profile.phone)}</p>' if profile.phone else ''
+    email_line = f'<p style="margin: 4px 0; font-size: 0.95em;">📧 <a href="mailto:{html.escape(profile.email)}" style="color: #2c5282; text-decoration: none;">{html.escape(profile.email)}</a></p>' if profile.email else ''
+    linkedin_line = f'<p style="margin: 4px 0; font-size: 0.95em;">🔗 LinkedIn: <a href="{html.escape(linkedin_url)}" target="_blank" style="color: #2c5282; text-decoration: none;">{html.escape(linkedin_url)}</a></p>'
+    github_line = f'<p style="margin: 4px 0; font-size: 0.95em;">🐱 GitHub: <a href="{html.escape(github_url)}" target="_blank" style="color: #2c5282; text-decoration: none;">{html.escape(github_url)}</a></p>'
 
-    website_row = f'''<tr>
-        <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-          <strong style="color: #2c5282;">🌐 Website</strong>
-        </td>
-        <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-          <a href="{html.escape(profile.website)}" target="_blank" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">{html.escape(profile.website.replace('https://', '').replace('http://', '').replace('www.', ''))}</a>
-        </td>
-      </tr>''' if profile.website else ''
+    website_line = (
+        f'<p style="margin: 4px 0; font-size: 0.95em;">🌐 Website: '
+        f'<a href="https://www.bestitconsulting.ca" target="_blank" style="color: #2c5282; text-decoration: none;">https://www.bestitconsulting.ca</a>, '
+        f'<a href="https://www.bestitconsultants.ca" target="_blank" style="color: #2c5282; text-decoration: none;">https://www.bestitconsultants.ca</a></p>'
+    )
 
-    phone_row = f'''<tr>
-        <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-          <strong style="color: #2c5282;">📞 Phone</strong>
-        </td>
-        <td style="padding: 10px 16px; color: #2d3748; border-bottom: 1px solid #e2e8f0;">
-          {html.escape(profile.phone)}
-        </td>
-      </tr>''' if profile.phone else ''
-
-    reference_row = f'''<tr>
-        <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc;">
-          <strong style="color: #2c5282;">🔗 Reference</strong>
-        </td>
-        <td style="padding: 10px 16px; font-family: 'Courier New', monospace; color: #2d3748; background: #edf2f7;">
-          Proposal #{html.escape(str(proposal.id))}
-        </td>
-      </tr>''' if hasattr(proposal, "id") and proposal.id else ''
-
-    return f"""  <!-- Professional Signature Section -->
-  <footer style="margin-top: 32px; padding: 24px; background: linear-gradient(to bottom, #ffffff, #f7fafc); border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-
-    <!-- Signature Header with decorative element -->
-    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #e2e8f0;">
-      <div style="display: inline-block; padding: 8px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 4px; margin-bottom: 12px;">
-        <p style="margin: 0; font-size: 0.85em; color: #ffffff; font-weight: 500; letter-spacing: 0.5px;">Best Regards</p>
-      </div>
-      <div style="margin-top: 16px;">
-        <img src="{settings.company_logo_url}" alt="{html.escape(settings.company_name)}" style="max-width: 200px; height: auto; margin-bottom: 12px;" />
-      </div>
-      <p style="margin: 8px 0 4px 0; font-weight: 700; font-size: 1.2em; color: #1a365d;">{html.escape(profile.full_name)}</p>
-      <p style="margin: 4px 0 0 0; font-size: 0.95em; color: #4a5568; font-style: italic;">{html.escape(profile.title)}</p>
+    return f"""  <!-- Signature Section -->
+    <footer style="margin-top: 16px; padding-top: 0; border-top: 0;">
+    <p style="margin: 0 0 4px 0; color: #2d3748;">Sincerely,</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; font-size: 1.1em; color: #1a365d;">{html.escape(display_name)}</p>
+    <p style="margin: 0 0 12px 0; color: #4a5568; font-size: 0.9em; font-style: italic;">{html.escape(profile.title)}</p>
+    <div style="margin-bottom: 12px;">
+      <img src="{settings.company_logo_url}" alt="{html.escape(settings.company_name)}" style="max-width: 180px; height: auto;" />
     </div>
-
-    <!-- Contact Information Card -->
-    <div style="background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
-      <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-        <tr>
-          <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0; width: 140px;">
-            <strong style="color: #2c5282;">� Phone</strong>
-          </td>
-          <td style="padding: 10px 16px; color: #2d3748; border-bottom: 1px solid #e2e8f0;">
-            236-992-3846
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-            <strong style="color: #2c5282;">📧 Email</strong>
-          </td>
-          <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-            <a href="mailto:service@bestitconsulting.ca" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">service@bestitconsulting.ca</a>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-            <strong style="color: #2c5282;">🌐 Website</strong>
-          </td>
-          <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-            <a href="https://www.bestitconsulting.ca" target="_blank" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">bestitconsulting.ca</a>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 16px; color: #2d3748; background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
-            <strong style="color: #2c5282;">🐱 GitHub</strong>
-          </td>
-          <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0;">
-            <a href="https://williamjxj.github.io/" target="_blank" style="color: #4299e1; text-decoration: none; border-bottom: 1px dotted #4299e1;">williamjxj.github.io</a>
-          </td>
-        </tr>
-        {reference_row}
-      </table>
-    </div>
-
-    <!-- Company Branding -->
-    <div style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 16px; border-radius: 6px; margin-bottom: 16px; border-left: 4px solid #4299e1;">
-      <p style="margin: 0 0 6px 0; font-size: 1em; color: #1a365d; font-weight: 600;">
-        {html.escape(settings.company_name)}
-      </p>
-      {"<p style='margin: 0; font-size: 0.85em; color: #4a5568;'><span style='color: #9f7aea;'>✨</span> <em>Crafted with AI-powered insights</em></p>" if getattr(proposal, "generated_with_ai", False) else ""}
-    </div>
-
-    <!-- Call to Action -->
-    <div style="padding: 16px; background: #fff; border: 1px dashed #cbd5e0; border-radius: 6px; margin-bottom: 16px;">
-      <p style="font-size: 0.9em; color: #2d3748; margin: 0; text-align: center;">
-        <strong style="color: #2c5282;">💬 Questions or concerns?</strong> We're here to help! Simply reply to this email.
-      </p>
-    </div>
-
-    <!-- Footer Legal -->
-    <div style="text-align: center; padding-top: 16px; border-top: 1px solid #e2e8f0;">
-      <p style="font-size: 0.75em; color: #a0aec0; margin: 0;">
-        © {datetime.now().year} {html.escape(settings.company_name)}. All rights reserved.
-      </p>
-    </div>
+    {phone_line}
+    {email_line}
+    {linkedin_line}
+    {github_line}
+    {website_line}
   </footer>
 </body>
 </html>"""
@@ -238,11 +146,12 @@ async def _format_proposal_as_html(proposal: Any, user_id: str) -> str:
     # Get user profile (KB first, .env fallback)
     profile = await profile_service.get_user_profile(user_id)
 
-    budget = html.escape(proposal.budget or "To be discussed")
-    timeline = html.escape(proposal.timeline or "To be discussed")
-    skills_list = ", ".join(html.escape(s) for s in (proposal.skills or [])) or "N/A"
+    budget = html.escape(proposal.budget) if proposal.budget else None
+    timeline = html.escape(proposal.timeline) if proposal.timeline else None
+    skills_list = ", ".join(html.escape(s) for s in (proposal.skills or [])) or None
     client = html.escape(proposal.client_name or "")
     platform = html.escape(proposal.job_platform or "")
+    greeting = f"Dear {client} Hiring Team," if client else "Dear Hiring Team,"
 
     # Convert markdown description to HTML
     proposal_content = proposal.description or ""
@@ -272,6 +181,32 @@ async def _format_proposal_as_html(proposal: Any, user_id: str) -> str:
     proposal_html = proposal_html.replace('<th>', '<th style="background: #f7fafc; padding: 0.6em; text-align: left; border: 1px solid #e2e8f0; font-weight: 600; color: #2c5282;">')
     proposal_html = proposal_html.replace('<td>', '<td style="padding: 0.6em; border: 1px solid #e2e8f0;">')
 
+    # Build project summary rows only when values are present
+    budget_row = f'''<tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; width: 140px; background: #f7fafc;">💰 Budget:</td>
+          <td style="padding: 12px 16px; color: #1a365d; font-weight: 500;">{budget}</td>
+        </tr>''' if budget else ''
+    timeline_row = f'''<tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; background: #f7fafc;">⏱️ Timeline:</td>
+          <td style="padding: 12px 16px; color: #1a365d; font-weight: 500;">{timeline}</td>
+        </tr>''' if timeline else ''
+    skills_row = f'''<tr>
+          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; vertical-align: top; background: #f7fafc;">🛠️ Skills:</td>
+          <td style="padding: 12px 16px; color: #1a365d;">{skills_list}</td>
+        </tr>''' if skills_list else ''
+    project_summary_section = f'''    <!-- Project Summary Box -->
+    <section style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 24px; margin: 0; border-radius: 0 0 8px 8px;">
+      <div style="display: flex; align-items: center; margin-bottom: 16px;">
+        <div style="width: 4px; height: 24px; background: linear-gradient(180deg, #48bb78 0%, #38a169 100%); margin-right: 12px; border-radius: 2px;"></div>
+        <h3 style="margin: 0; color: #1a365d; font-size: 1.2em; font-weight: 600;">💼 Project Summary</h3>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        {budget_row}
+        {timeline_row}
+        {skills_row}
+      </table>
+    </section>''' if (budget or timeline or skills_list) else ''
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -300,44 +235,12 @@ async def _format_proposal_as_html(proposal: Any, user_id: str) -> str:
         <h2 style="margin: 0; color: #1a365d; font-size: 1.3em; font-weight: 600;">📝 Proposal Details</h2>
       </div>
       <div style="font-size: 0.95em; color: #2d3748;">
+        <p style="margin: 0 0 16px 0;">{greeting}</p>
 {proposal_html}
       </div>
     </section>
 
-    <!-- Project Summary Box -->
-    <section style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 24px; margin: 0; border-radius: 0 0 8px 8px;">
-      <div style="display: flex; align-items: center; margin-bottom: 16px;">
-        <div style="width: 4px; height: 24px; background: linear-gradient(180deg, #48bb78 0%, #38a169 100%); margin-right: 12px; border-radius: 2px;"></div>
-        <h3 style="margin: 0; color: #1a365d; font-size: 1.2em; font-weight: 600;">💼 Project Summary</h3>
-      </div>
-
-      <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; width: 140px; background: #f7fafc;">
-            💰 Budget:
-          </td>
-          <td style="padding: 12px 16px; color: #1a365d; font-weight: 500;">
-            {budget}
-          </td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; background: #f7fafc;">
-            ⏱️ Timeline:
-          </td>
-          <td style="padding: 12px 16px; color: #1a365d; font-weight: 500;">
-            {timeline}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 12px 16px; color: #2d3748; font-weight: 600; vertical-align: top; background: #f7fafc;">
-            🛠️ Skills:
-          </td>
-          <td style="padding: 12px 16px; color: #1a365d;">
-            {skills_list}
-          </td>
-        </tr>
-      </table>
-    </section>
+{project_summary_section}
   </main>
 
 {_build_signature_html(profile, proposal)}"""
@@ -418,34 +321,27 @@ async def send_proposal_submission_email(
     subject = f"Proposal: {proposal.title}" if proposal.title else "New Proposal"
     html_content = await _format_proposal_as_html(proposal, user_id or "")
 
-    # Create comprehensive plain text version with profile-based signature
-    linkedin_text = f"\nLinkedIn: {profile.linkedin}" if profile.linkedin else ""
-    github_text = f"\nGitHub: {profile.github}" if profile.github else ""
-    website_text = f"\n🌐 Website: {profile.website}" if profile.website else ""
-    phone_text = f"\n📞 Phone: {profile.phone}" if profile.phone else ""
-    reference_text = f"\nReference: Proposal #{proposal.id}" if hasattr(proposal, "id") and proposal.id else ""
-    ai_text = "\n✨ Generated with AI assistance" if getattr(proposal, "generated_with_ai", False) else ""
+    budget_text = f"Budget: {proposal.budget}\n" if proposal.budget else ""
+    timeline_text = f"Timeline: {proposal.timeline}\n" if proposal.timeline else ""
+    skills_text = f"Skills: {', '.join(proposal.skills)}\n" if proposal.skills else ""
+    details_section = f"--- DETAILS ---\n{budget_text}{timeline_text}{skills_text}\n" if (proposal.budget or proposal.timeline or proposal.skills) else ""
 
     plain_content = (
+        f"Dear {proposal.client_name + ' Hiring Team' if proposal.client_name else 'Hiring Team'},\n\n"
         f"Proposal: {proposal.title}\n\n"
         f"Client: {proposal.client_name or 'N/A'}\n"
         f"Platform: {proposal.job_platform or 'N/A'}\n\n"
         f"--- PROPOSAL ---\n{proposal.description or ''}\n\n"
-        f"--- DETAILS ---\n"
-        f"Budget: {proposal.budget or 'To be discussed'}\n"
-        f"Timeline: {proposal.timeline or 'To be discussed'}\n"
-        f"Skills: {', '.join(proposal.skills or []) or 'N/A'}\n\n"
+        f"{details_section}"
         f"{'=' * 60}\n\n"
-        f"Best regards,\n\n"
-        f"{profile.full_name}\n"
+        f"Sincerely,\n\n"
+        f"{settings.user_full_name or profile.full_name}\n"
         f"{profile.title}\n\n"
-        f"📞 236-992-3846\n"
-        f"📧 service@bestitconsulting.ca\n"
-        f"🌐 Website: https://www.bestitconsulting.ca\n"
-        f"🐱 GitHub: https://williamjxj.github.io/\n\n"
-        f"{settings.company_name}{ai_text}\n\n"
-        f"💬 We value your feedback! Please reply to this email with any questions or concerns.\n\n"
-        f"© {datetime.now().year} {settings.company_name}. All rights reserved."
+        f"📞 {profile.phone or '236-992-3846'}\n"
+        f"📧 {profile.email or 'service@bestitconsulting.ca'}\n"
+        f"🔗 LinkedIn: {profile.linkedin or 'https://www.linkedin.com/in/william-jiang-226a7616/'}\n"
+        f"🐱 GitHub: {profile.github or 'https://williamjxj.github.io/'}\n"
+        f"🌐 Website: https://www.bestitconsulting.ca, https://www.bestitconsultants.ca\n"
     )
 
     if _send_resend_email(to_email, subject, html_content, plain_content, bcc_email):

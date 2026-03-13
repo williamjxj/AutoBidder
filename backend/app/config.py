@@ -136,7 +136,7 @@ class Settings(BaseSettings):
 
     # User Profile (for proposal signatures)
     user_full_name: str = Field(default="William Jiang", alias="USER_FULL_NAME")
-    user_title: str = Field(default="Co-Founder / Full-Stack & AI Engineer", alias="USER_TITLE")
+    user_title: str = Field(default="Senior Full Stack Engineer | AI Consultant, Vancouver BC Canada", alias="USER_TITLE")
     user_linkedin: Optional[str] = Field(default=None, alias="USER_LINKEDIN")
     user_github: Optional[str] = Field(default=None, alias="USER_GITHUB")
 

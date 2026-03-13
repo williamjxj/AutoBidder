@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UserProfile:
     """User profile information for email signatures and display."""
-    
+
     full_name: str
     title: str
     email: str
@@ -29,7 +29,7 @@ class UserProfile:
     website: str | None = None
     linkedin: str | None = None
     github: str | None = None
-    
+
     @property
     def has_complete_info(self) -> bool:
         """Check if profile has all essential information."""
@@ -39,42 +39,42 @@ class UserProfile:
 class ProfileService:
     """
     Service for retrieving user profile information.
-    
+
     Priority order:
     1. Knowledge base documents (primary source)
     2. Environment configuration (fallback defaults)
     """
-    
+
     async def get_user_profile(self, user_id: str) -> UserProfile:
         """
         Get user profile with smart fallback.
-        
+
         Args:
             user_id: User's UUID
-            
+
         Returns:
             UserProfile with information from KB or defaults
         """
         # Try to get profile from knowledge base
         kb_profile = await self._get_profile_from_knowledge_base(user_id)
-        
+
         if kb_profile and kb_profile.has_complete_info:
             logger.info(f"Using profile from knowledge base for user {user_id}")
             return kb_profile
-        
+
         # Fall back to .env defaults
         logger.info(f"Using default profile from .env for user {user_id}")
         return self._get_default_profile()
-    
+
     async def _get_profile_from_knowledge_base(self, user_id: str) -> UserProfile | None:
         """
         Extract profile from knowledge base documents.
-        
+
         Looks for resume/CV documents and extracts metadata.
-        
+
         Args:
             user_id: User's UUID
-            
+
         Returns:
             UserProfile from KB or None if not found
         """
@@ -106,11 +106,11 @@ class ProfileService:
                     """,
                     user_id
                 )
-                
+
                 if not row:
                     logger.debug(f"No profile found in knowledge base for user {user_id}")
                     return None
-                
+
                 # Extract profile information from metadata
                 full_name = row['title'] or None  # title field stores the person's name/title
                 email = row['email']
@@ -118,7 +118,7 @@ class ProfileService:
                 website = row['reference_url']
                 linkedin = None
                 github = None
-                
+
                 # Parse contact_url for LinkedIn/GitHub
                 if row['contact_url']:
                     contact_url = row['contact_url']
@@ -126,22 +126,22 @@ class ProfileService:
                         linkedin = contact_url
                     elif 'github.com' in contact_url.lower():
                         github = contact_url
-                
+
                 # Try to extract name and title separately if title contains both
                 name = full_name
                 title = None
-                
+
                 if full_name and (' - ' in full_name or ' | ' in full_name):
                     # Format like "John Doe - Software Engineer" or "John Doe | Developer"
                     parts = re.split(r'\s*[-|]\s*', full_name, maxsplit=1)
                     if len(parts) == 2:
                         name = parts[0].strip()
                         title = parts[1].strip()
-                
+
                 # If we don't have a separate title, use a generic one
                 if not title:
-                    title = "Professional"  # Generic default
-                
+                    title = settings.user_title
+
                 return UserProfile(
                     full_name=name or "User",
                     title=title,
@@ -151,15 +151,15 @@ class ProfileService:
                     linkedin=linkedin,
                     github=github,
                 )
-                
+
         except Exception as e:
             logger.warning(f"Error retrieving profile from knowledge base: {e}")
             return None
-    
+
     def _get_default_profile(self) -> UserProfile:
         """
         Get default profile from environment configuration.
-        
+
         Returns:
             UserProfile with values from settings
         """
@@ -172,7 +172,7 @@ class ProfileService:
             linkedin=settings.user_linkedin,
             github=settings.user_github,
         )
-    
+
     async def update_profile_from_document(
         self,
         user_id: str,
@@ -181,14 +181,14 @@ class ProfileService:
     ) -> bool:
         """
         Update knowledge base document with profile metadata.
-        
+
         This can be called after uploading a resume to extract and store profile info.
-        
+
         Args:
             user_id: User's UUID
             document_id: Document UUID
             profile_data: Dict with keys: title, email, phone, reference_url, contact_url
-            
+
         Returns:
             True if successful
         """
@@ -215,10 +215,10 @@ class ProfileService:
                     profile_data.get('reference_url'),
                     profile_data.get('contact_url'),
                 )
-                
+
                 logger.info(f"Updated profile metadata for document {document_id}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Error updating profile metadata: {e}")
             return False
