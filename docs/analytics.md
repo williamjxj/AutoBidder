@@ -516,7 +516,7 @@ AnalyticsPage (main component)
 ## Related Documentation
 
 - [Dashboard Page](./dashboard.md) — Main landing page
-- [Proposals Workflow](./proposal-workflow-ui.md) — Proposal creation process
+- [Proposals](./proposals.md) — Proposal creation process
 - [Projects Page](./projects-page-faq.md) — Job discovery
 - [User Guides](./user-guides.md) — Complete navigation guide
 - [Database Schema](./database-schema-reference.md) — Data models

@@ -595,24 +595,24 @@ results = await vector_store.search(
 #  ---SUPPLEMENTAL INFO---
 #  Freelancer Expert. 5 years React. Prefer remote SaaS projects."
 #
-# RAG score: 0.92 (high relevance due to supplemental context!)
+# RAG relevance: high due to supplemental context.
 ```
 
 ---
 
-## Database Migration
+## Database Schema Source
 
-**File**: `database/migrations/004_add_kb_document_fields.sql`
+**File**: `database/migrations/001_initial_schema.sql`
 
 **Apply**:
 ```bash
-psql -U postgres -d auto_bidder_dev -f database/migrations/004_add_kb_document_fields.sql
+psql -U postgres -d auto_bidder_dev -f database/migrations/001_initial_schema.sql
 ```
 
-**Contents**:
-- Adds `title`, `reference_url`, `email`, `phone`, `contact_url` columns
-- Creates indexes on searchable fields
-- Adds column comments
+**Includes**:
+- `knowledge_base_documents` defines `title`, `reference_url`, `email`, `phone`, `contact_url`
+- Search indexes for `title`, `email`, and `phone`
+- Related table constraints and metadata in the consolidated baseline
 
 ---
 
@@ -773,9 +773,7 @@ async def test_upload_with_supplemental_info():
 ## Related Documentation
 
 - [AI Proposal Generation — Concepts](./ai-proposal-generation-concepts.md) - How collections, keywords, and RAG connect in proposal generation
-- [chromadb-setup.md](./chromadb-setup.md) - ChromaDB hybrid mode setup
-- [chromadb-implementation-summary.md](./chromadb-implementation-summary.md) - ChromaDB implementation details
-- [chromadb-upgrade-guide.md](./chromadb-upgrade-guide.md) - Upgrading ChromaDB client
+- [chromadb.md](./chromadb.md) - ChromaDB setup, modes, upgrade, troubleshooting
 - [database-schema-reference.md](./database-schema-reference.md) - Full database schema
 - [user-guides.md](./user-guides.md) - End-user documentation
 

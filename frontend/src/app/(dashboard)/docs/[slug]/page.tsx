@@ -28,10 +28,10 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
     description: 'Complete navigation and workflow guide',
     githubPath: 'docs/user-guides.md',
   },
-  'proposal-workflow-ui': {
-    title: 'Proposal Workflow',
-    description: 'Step-by-step proposal creation process',
-    githubPath: 'docs/proposal-workflow-ui.md',
+  'proposals': {
+    title: 'Proposals',
+    description: 'AI-powered proposal workflow and generation',
+    githubPath: 'docs/proposals.md',
   },
   'huggingface-job-discovery': {
     title: 'Job Discovery',
@@ -47,6 +47,11 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
     title: 'Knowledge Base Setup',
     description: 'Document upload and RAG integration',
     githubPath: 'docs/knowledge-base.md',
+  },
+  'chromadb': {
+    title: 'ChromaDB',
+    description: 'Vector DB setup, modes, and troubleshooting',
+    githubPath: 'docs/chromadb.md',
   },
   'autonomous-automation-strategy': {
     title: 'Autonomous Features',
@@ -162,11 +167,11 @@ export default function DocPage({ params }: PageProps) {
                     )}
                     {slug === 'user-guides' && (
                       <>
-                        <DocLink title="Proposal Workflow" href="/docs/proposal-workflow-ui" />
+                        <DocLink title="Proposals" href="/docs/proposals" />
                         <DocLink title="Job Discovery" href="/docs/huggingface-job-discovery" />
                       </>
                     )}
-                    {slug === 'proposal-workflow-ui' && (
+                    {slug === 'proposals' && (
                       <>
                         <DocLink title="AI Concepts" href="/docs/ai-proposal-generation-concepts" />
                         <DocLink title="Knowledge Base" href="/docs/knowledge-base" />

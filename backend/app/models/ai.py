@@ -47,12 +47,6 @@ class GeneratedProposal(BaseModel):
     ai_model: str = Field(..., description="AI model used for generation")
     strategy_id: Optional[str] = Field(None, description="Strategy UUID used")
     tokens_used: Optional[int] = Field(None, description="Approximate tokens used")
-    confidence_score: float = Field(default=1.0, description="AI confidence score (0-1)")
-
-    # Quality (T032 - proposal quality feedback)
-    quality_score: Optional[float] = Field(None, description="0-100 overall quality")
-    quality_breakdown: Optional[Dict[str, float]] = Field(None, description="Dimension scores")
-    quality_suggestions: Optional[List[str]] = Field(None, description="Improvement suggestions")
 
 
 class RAGContext(BaseModel):

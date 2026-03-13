@@ -9,6 +9,7 @@ import asyncpg
 import os
 from pathlib import Path
 import sys
+import re
 
 
 async def run_migrations():
@@ -37,7 +38,28 @@ async def run_migrations():
         print(f"❌ Migrations directory not found: {migrations_dir}")
         sys.exit(1)
 
-    migration_files = sorted(migrations_dir.glob("*.sql"))
+    migration_files = sorted(migrations_dir.glob("*.sql"), key=lambda p: p.name)
+
+    # Guard against duplicate numeric prefixes such as 014_*.sql appearing multiple times.
+    # This keeps migration ordering deterministic and avoids accidental schema divergence.
+    prefix_map: dict[str, list[str]] = {}
+    for migration_file in migration_files:
+        match = re.match(r"^(\d+)_", migration_file.name)
+        if not match:
+            continue
+        prefix = match.group(1)
+        prefix_map.setdefault(prefix, []).append(migration_file.name)
+
+    duplicate_prefixes = {
+        prefix: names for prefix, names in prefix_map.items() if len(names) > 1
+    }
+    if duplicate_prefixes:
+        print("❌ Duplicate migration numeric prefixes detected:")
+        for prefix, names in sorted(duplicate_prefixes.items()):
+            print(f"   {prefix}: {', '.join(sorted(names))}")
+        print("Resolve duplicates before running migrations.")
+        await conn.close()
+        sys.exit(1)
 
     if not migration_files:
         print(f"⚠️  No migration files found in {migrations_dir}")

@@ -38,7 +38,7 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
         user_id: User UUID
 
     Returns:
-        Dict with jobs_discovered, jobs_qualified, proposals_generated, notifications_sent
+        Dict with jobs_discovered, proposals_generated, notifications_sent
 
     Raises:
         Exception: Propagates from hf_loader or project_service
@@ -55,7 +55,7 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
 
     if not keywords:
         logger.info("User %s has no active keywords; skipping discovery", user_id)
-        return {"jobs_discovered": 0, "jobs_qualified": 0, "proposals_generated": 0, "notifications_sent": 0}
+        return {"jobs_discovered": 0, "proposals_generated": 0, "notifications_sent": 0}
 
     # Load and filter jobs from HuggingFace
     from app.etl.hf_loader import load_and_filter_hf_jobs
@@ -68,7 +68,7 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
 
     if not records:
         logger.info("No jobs found for user %s (keywords: %s)", user_id, keywords)
-        return {"jobs_discovered": 0, "jobs_qualified": 0, "proposals_generated": 0, "notifications_sent": 0}
+        return {"jobs_discovered": 0, "proposals_generated": 0, "notifications_sent": 0}
 
     # Upsert to database
     inserted, updated = await upsert_jobs(records, etl_source="autonomous_discovery")
@@ -123,7 +123,6 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
 
     return {
         "jobs_discovered": total,
-        "jobs_qualified": 0,
         "proposals_generated": proposals_generated,
         "notifications_sent": 0,
     }
@@ -166,7 +165,6 @@ async def run_autonomous_discovery_job() -> None:
                 user_id,
                 run_id,
                 jobs_discovered=result.get("jobs_discovered", 0),
-                jobs_qualified=result.get("jobs_qualified", 0),
                 proposals_generated=result.get("proposals_generated", 0),
                 notifications_sent=result.get("notifications_sent", 0),
                 status="success",
@@ -229,7 +227,6 @@ async def _run_pipeline_and_record(user_id: str, run_id: str) -> None:
             user_id,
             run_id,
             jobs_discovered=result.get("jobs_discovered", 0),
-            jobs_qualified=result.get("jobs_qualified", 0),
             proposals_generated=result.get("proposals_generated", 0),
             notifications_sent=result.get("notifications_sent", 0),
             status="success",

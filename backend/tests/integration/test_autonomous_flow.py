@@ -8,7 +8,7 @@ Tests discovery pipeline via API.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -49,7 +49,7 @@ db_required = pytest.mark.skipif(
 @pytest.fixture
 def mock_user() -> UserResponse:
     """Fake user for dependency override."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(datetime.UTC)
     return UserResponse(
         id="00000000-0000-0000-0000-000000000001",
         email="test@example.com",
@@ -117,7 +117,6 @@ async def test_autonomous_status_returns_shape_when_authenticated(
             assert response.status_code == 200
             data = response.json()
             assert "jobs_discovered" in data
-            assert "jobs_qualified" in data
             assert "proposals_auto_generated" in data
             assert "notifications_sent" in data
             assert "status" in data

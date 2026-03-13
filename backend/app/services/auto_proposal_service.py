@@ -70,10 +70,6 @@ async def auto_generate_proposals(
             )
             result = await ai_service.generate_proposal(user_uuid, request)
 
-            quality_score: int | None = None
-            if result.quality_score is not None:
-                quality_score = int(round(result.quality_score))
-
             await create_auto_generated_proposal(
                 user_id=user_uuid,
                 job_id=job.get("id", ""),
@@ -87,9 +83,6 @@ async def auto_generate_proposals(
                 job_url=None,
                 job_platform=job.get("platform"),
                 client_name=job.get("company"),
-                quality_score=quality_score,
-                quality_breakdown=result.quality_breakdown,
-                quality_suggestions=result.quality_suggestions,
             )
             created += 1
             logger.info(

@@ -22,25 +22,13 @@ class AutonomousSettings(BaseModel):
         le=1440,
         description="Minutes between discovery runs",
     )
-    notification_threshold: float = Field(
-        default=0.8,
-        ge=0.0,
-        le=1.0,
-        description="Min score to trigger notification",
-    )
     notifications_enabled: bool = Field(
         default=True,
         description="Send email when high-quality jobs found",
     )
     auto_generate_enabled: bool = Field(
         default=False,
-        description="Auto-generate proposals for high-confidence jobs",
-    )
-    auto_generate_threshold: float = Field(
-        default=0.85,
-        ge=0.0,
-        le=1.0,
-        description="Min score to auto-generate proposal",
+        description="Auto-generate proposals for discovered jobs",
     )
     autonomy_level: str = Field(
         default="assisted",
@@ -63,7 +51,6 @@ class AutonomousStatusResponse(BaseModel):
     last_run_at: Optional[str] = Field(None, description="ISO timestamp of last run started_at")
     status: Optional[str] = Field(None, description="success, running, failed")
     jobs_discovered: int = 0
-    jobs_qualified: int = 0
     proposals_auto_generated: int = 0
     notifications_sent: int = 0
     errors: Optional[list] = Field(None, description="Error messages if failed")
@@ -81,10 +68,8 @@ class AutonomousSettingsUpdate(BaseModel):
 
     auto_discovery_enabled: Optional[bool] = None
     discovery_interval_minutes: Optional[int] = Field(None, ge=5, le=1440)
-    notification_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     notifications_enabled: Optional[bool] = None
     auto_generate_enabled: Optional[bool] = None
-    auto_generate_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     autonomy_level: Optional[str] = None
 
     @field_validator("autonomy_level")

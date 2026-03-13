@@ -13,10 +13,8 @@ from app.models.autonomy import AutonomousSettings, AutonomousSettingsUpdate
 # Default values matching data-model.md
 DEFAULT_AUTO_DISCOVERY_ENABLED = False
 DEFAULT_DISCOVERY_INTERVAL_MINUTES = 15
-DEFAULT_NOTIFICATION_THRESHOLD = 0.80
 DEFAULT_NOTIFICATIONS_ENABLED = True
 DEFAULT_AUTO_GENERATE_ENABLED = False
-DEFAULT_AUTO_GENERATE_THRESHOLD = 0.85
 DEFAULT_AUTONOMY_LEVEL = "assisted"
 
 
@@ -37,21 +35,17 @@ async def get_autonomy_settings(user_id: str) -> AutonomousSettings:
             SELECT
                 COALESCE(auto_discovery_enabled, $2) AS auto_discovery_enabled,
                 COALESCE(discovery_interval_minutes, $3) AS discovery_interval_minutes,
-                COALESCE(notification_threshold, $4) AS notification_threshold,
-                COALESCE(notifications_enabled, $5) AS notifications_enabled,
-                COALESCE(auto_generate_enabled, $6) AS auto_generate_enabled,
-                COALESCE(auto_generate_threshold, $7) AS auto_generate_threshold,
-                COALESCE(autonomy_level, $8) AS autonomy_level
+                COALESCE(notifications_enabled, $4) AS notifications_enabled,
+                COALESCE(auto_generate_enabled, $5) AS auto_generate_enabled,
+                COALESCE(autonomy_level, $6) AS autonomy_level
             FROM user_profiles
             WHERE user_id = $1
             """,
             user_id,
             DEFAULT_AUTO_DISCOVERY_ENABLED,
             DEFAULT_DISCOVERY_INTERVAL_MINUTES,
-            float(DEFAULT_NOTIFICATION_THRESHOLD),
             DEFAULT_NOTIFICATIONS_ENABLED,
             DEFAULT_AUTO_GENERATE_ENABLED,
-            float(DEFAULT_AUTO_GENERATE_THRESHOLD),
             DEFAULT_AUTONOMY_LEVEL,
         )
 
@@ -59,20 +53,16 @@ async def get_autonomy_settings(user_id: str) -> AutonomousSettings:
         return AutonomousSettings(
             auto_discovery_enabled=DEFAULT_AUTO_DISCOVERY_ENABLED,
             discovery_interval_minutes=DEFAULT_DISCOVERY_INTERVAL_MINUTES,
-            notification_threshold=DEFAULT_NOTIFICATION_THRESHOLD,
             notifications_enabled=DEFAULT_NOTIFICATIONS_ENABLED,
             auto_generate_enabled=DEFAULT_AUTO_GENERATE_ENABLED,
-            auto_generate_threshold=DEFAULT_AUTO_GENERATE_THRESHOLD,
             autonomy_level=DEFAULT_AUTONOMY_LEVEL,
         )
 
     return AutonomousSettings(
         auto_discovery_enabled=bool(row["auto_discovery_enabled"]),
         discovery_interval_minutes=int(row["discovery_interval_minutes"]),
-        notification_threshold=float(row["notification_threshold"]),
         notifications_enabled=bool(row["notifications_enabled"]),
         auto_generate_enabled=bool(row["auto_generate_enabled"]),
-        auto_generate_threshold=float(row["auto_generate_threshold"]),
         autonomy_level=str(row["autonomy_level"]),
     )
 
@@ -105,10 +95,6 @@ async def update_autonomy_settings(
         updates.append(f"discovery_interval_minutes = ${idx}")
         params.append(update.discovery_interval_minutes)
         idx += 1
-    if update.notification_threshold is not None:
-        updates.append(f"notification_threshold = ${idx}")
-        params.append(update.notification_threshold)
-        idx += 1
     if update.notifications_enabled is not None:
         updates.append(f"notifications_enabled = ${idx}")
         params.append(update.notifications_enabled)
@@ -116,10 +102,6 @@ async def update_autonomy_settings(
     if update.auto_generate_enabled is not None:
         updates.append(f"auto_generate_enabled = ${idx}")
         params.append(update.auto_generate_enabled)
-        idx += 1
-    if update.auto_generate_threshold is not None:
-        updates.append(f"auto_generate_threshold = ${idx}")
-        params.append(update.auto_generate_threshold)
         idx += 1
     if update.autonomy_level is not None:
         updates.append(f"autonomy_level = ${idx}")
@@ -149,7 +131,6 @@ async def record_autonomous_run(
     user_id: str,
     run_id: str,
     jobs_discovered: int = 0,
-    jobs_qualified: int = 0,
     proposals_generated: int = 0,
     notifications_sent: int = 0,
     status: str = "success",
@@ -163,14 +144,13 @@ async def record_autonomous_run(
             """
             UPDATE autonomous_runs
             SET completed_at = NOW(), status = $2, jobs_discovered = $3,
-                jobs_qualified = $4, proposals_generated = $5,
-                notifications_sent = $6, errors = $7::jsonb
+                proposals_generated = $4, notifications_sent = $5,
+                errors = $6::jsonb
             WHERE id = $1::uuid
             """,
             run_id,
             status,
             jobs_discovered,
-            jobs_qualified,
             proposals_generated,
             notifications_sent,
             json.dumps(errors) if errors else None,
@@ -201,7 +181,7 @@ async def get_last_autonomous_run(user_id: str) -> Optional[dict]:
         row = await conn.fetchrow(
             """
             SELECT started_at, completed_at, status, jobs_discovered,
-                   jobs_qualified, proposals_generated, notifications_sent, errors
+                     proposals_generated, notifications_sent, errors
             FROM autonomous_runs
             WHERE user_id = $1::uuid
             ORDER BY started_at DESC

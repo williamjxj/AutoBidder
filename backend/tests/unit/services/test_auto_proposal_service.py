@@ -75,9 +75,6 @@ async def test_auto_generate_proposals_processes_jobs() -> None:
                 timeline="2 weeks",
                 skills=[],
                 ai_model="gpt-4",
-                quality_score=None,
-                quality_breakdown=None,
-                quality_suggestions=None,
             )
         )
         mock_settings.get_settings = AsyncMock(

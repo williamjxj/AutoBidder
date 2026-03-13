@@ -136,7 +136,7 @@ async def load_and_filter_hf_datasets():
 │  2. Normalize schema → JobRecord                                 │
 │  3. Deduplicate (fingerprint hash: platform+external_id)         │
 │  4. Enrich: skill extraction, budget normalization, category tag │
-│  5. Quality score (completeness check)                           │
+│  5. Completeness check and validation                            │
 └──────────────────────────┬──────────────────────────────────────┘
                            ↓ LOAD (dual-write)
            ┌───────────────┴───────────────┐
@@ -365,8 +365,6 @@ CREATE TABLE jobs (
 
   -- ETL metadata
   status            job_status DEFAULT 'new',
-  match_score       NUMERIC(5,4),                 -- 0.0000 to 1.0000
-  quality_score     NUMERIC(5,4),                 -- completeness of data
   chroma_indexed    BOOLEAN DEFAULT false,         -- has been embedded into RAG
   etl_source        TEXT,                         -- e.g. "upwork_scheduler", "hf_loader"
   raw_payload       JSONB,                         -- original scraped data
@@ -382,7 +380,6 @@ CREATE TABLE jobs (
 CREATE INDEX idx_jobs_platform        ON jobs(platform);
 CREATE INDEX idx_jobs_category        ON jobs(category);
 CREATE INDEX idx_jobs_status          ON jobs(status);
-CREATE INDEX idx_jobs_match_score     ON jobs(match_score DESC);
 CREATE INDEX idx_jobs_posted_at       ON jobs(posted_at DESC);
 CREATE INDEX idx_jobs_chroma_indexed  ON jobs(chroma_indexed) WHERE chroma_indexed = false;
 CREATE INDEX idx_jobs_skills          ON jobs USING GIN(skills_required);
@@ -429,7 +426,6 @@ CREATE TABLE proposals (
   -- AI generation metadata
   model_used        TEXT DEFAULT 'gpt-4-turbo',
   rag_docs_used     TEXT[],                      -- ChromaDB doc IDs used as context
-  confidence_score  NUMERIC(5,4),               -- 0–1, drives auto-send decision
   generation_tokens INT,
   prompt_version    TEXT,                        -- bidding strategy template ID
 
@@ -449,7 +445,6 @@ CREATE TABLE proposals (
 CREATE INDEX idx_proposals_job_id    ON proposals(job_id);
 CREATE INDEX idx_proposals_user_id   ON proposals(user_id);
 CREATE INDEX idx_proposals_status    ON proposals(status);
-CREATE INDEX idx_proposals_confidence ON proposals(confidence_score DESC);
 
 
 -- ============================================================
@@ -474,7 +469,6 @@ CREATE TABLE submissions (
   retry_count       INT DEFAULT 0,
 
   -- Auto-send gate
-  confidence_score  NUMERIC(5,4),               -- snapshot at time of send
   auto_approved     BOOLEAN DEFAULT false
 );
 
@@ -507,7 +501,7 @@ CREATE TABLE bidding_strategies (
 -- USER KEYWORDS (Domain-specific filter per user)
 -- ============================================================
 
-CREATE TABLE user_keywords (
+CREATE TABLE keywords (
   id          SERIAL PRIMARY KEY,
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   keyword     TEXT NOT NULL,
@@ -592,7 +586,7 @@ async def find_matching_jobs(user_profile: dict, top_k: int = 20) -> list[dict]:
           AND j.expires_at > NOW()
           AND j.budget_max >= $2
           AND j.skills_required && $3   -- array overlap with user skills
-        ORDER BY j.match_score DESC
+        ORDER BY j.posted_at DESC
         LIMIT $4
     """, candidate_ids, user_profile["hourly_rate_min"],
          user_profile["skills"], top_k)

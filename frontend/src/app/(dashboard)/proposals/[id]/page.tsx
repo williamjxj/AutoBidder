@@ -1,7 +1,7 @@
 /**
  * Proposal Detail Page
  *
- * Displays proposal content with quality score and suggestions (T034, FR-009).
+ * Displays proposal content and metadata.
  */
 
 'use client'
@@ -13,8 +13,7 @@ import { PageContainer } from '@/components/shared/page-container'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { getProposal, getProposalQuality, deleteProposal } from '@/lib/api/client'
+import { getProposal, deleteProposal } from '@/lib/api/client'
 import { LoadingSkeleton } from '@/components/workflow/progress-overlay'
 import { MarkdownViewer } from '@/components/shared/markdown-viewer'
 import { ArrowLeft, Trash2, Edit, AlertTriangle } from 'lucide-react'
@@ -25,11 +24,9 @@ export default function ProposalDetailPage() {
   const params = useParams()
   const id = params?.id as string
   const [proposal, setProposal] = useState<any | null>(null)
-  const [quality, setQuality] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [qualityError, setQualityError] = useState<string | null>(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -39,14 +36,6 @@ export default function ProposalDetailPage() {
       try {
         const p = await getProposal(id)
         setProposal(p)
-        if (p) {
-          try {
-            const q = await getProposalQuality(id)
-            setQuality(q)
-          } catch {
-            setQualityError('Quality data not available')
-          }
-        }
       } catch (error) {
         console.error('Error loading proposal:', error)
         setProposal(null)
@@ -116,9 +105,6 @@ export default function ProposalDetailPage() {
         {proposal.source === 'auto_generated' && (
           <Badge variant="outline">Auto-generated</Badge>
         )}
-        {proposal.quality_score != null && (
-          <Badge variant="default">Quality: {proposal.quality_score}/100</Badge>
-        )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -138,9 +124,9 @@ export default function ProposalDetailPage() {
                 >
                   <Edit className="h-4 w-4 mr-2" /> Edit
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowDeleteConfirm(true)}
                   className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive border-slate-200 dark:border-slate-800"
                 >
@@ -174,68 +160,8 @@ export default function ProposalDetailPage() {
           </Card>
         </div>
 
-        {/* Sidebar Column: Quality & Meta */}
+        {/* Sidebar Column: Meta */}
         <div className="w-full lg:w-80 space-y-6">
-          {(quality || proposal.quality_score != null) && (
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="pb-3 border-b">
-                <h3 className="font-semibold text-sm">Quality Analysis</h3>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {qualityError && (
-                  <p className="text-sm text-muted-foreground">{qualityError}</p>
-                )}
-                
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Overall Score</span>
-                    <span className="font-bold text-primary">
-                      {quality?.overall_score ?? proposal.quality_score ?? 0}/100
-                    </span>
-                  </div>
-                  <Progress
-                    value={quality?.overall_score ?? proposal.quality_score ?? 0}
-                    className="h-2"
-                  />
-                </div>
-
-                {quality?.dimension_scores && Object.entries(quality.dimension_scores).length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Breakdown
-                    </h4>
-                    <div className="grid gap-2">
-                      {Object.entries(quality.dimension_scores).map(([dim, score]) => (
-                        <div key={dim} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="capitalize">{dim}</span>
-                            <span>{Math.round(Number(score))}%</span>
-                          </div>
-                          <Progress value={Number(score)} className="h-1" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {quality?.suggestions && quality.suggestions.length > 0 && (
-                  <div className="space-y-3 pt-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Suggestions
-                    </h4>
-                    <ul className="space-y-2">
-                      {quality.suggestions.map((s: string, i: number) => (
-                        <li key={i} className="text-xs leading-relaxed text-muted-foreground bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
-                          • {s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
             <CardHeader className="pb-3 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Proposal Metadata
@@ -279,9 +205,9 @@ export default function ProposalDetailPage() {
               <Button variant="ghost" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>
                 Cancel
               </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleDelete} 
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
                 className="bg-red-600 hover:bg-red-700"
                 disabled={isDeleting}
               >

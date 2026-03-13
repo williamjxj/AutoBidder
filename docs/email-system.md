@@ -274,7 +274,7 @@ The email system provides a production-ready solution with:
 ## 🔗 Related Documentation
 
 - [Setup and Run Guide](./setup-and-run.md)
-- [Proposal Workflow](./proposal-workflow-ui.md)
+- [Proposals](./proposals.md)
 - [README](../README.md)
 
 ---

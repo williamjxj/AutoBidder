@@ -2,6 +2,11 @@
 
 Purpose, relationships, and workflows for all PostgreSQL tables.
 
+Canonical source of truth:
+
+- `database/migrations/001_initial_schema.sql` (current baseline schema)
+- `database/migrations/016_remove_scoring_artifacts.sql` (latest cleanup for existing DBs)
+
 ---
 
 ## 1. Nav-to-Table Mapping
@@ -17,7 +22,7 @@ Purpose, relationships, and workflows for all PostgreSQL tables.
 | Analytics      | /analytics      | workflow_analytics, analytics_events | Resources |
 | Settings       | /settings       | user_profiles, platform_credentials | Resources |
 
-**Backend-only (no nav)**: etl_runs, user_session_states, draft_work, scraping_jobs, user_project_status, user_project_qualifications
+**Backend-only (no nav)**: etl_runs, user_session_states, draft_work, scraping_jobs, user_project_status
 
 ---
 
@@ -285,7 +290,7 @@ flowchart LR
 |--------|------|---------|
 | user_id | uuid | FK → users |
 | project_id | uuid | FK → projects |
-| status | varchar | new, reviewed, applied, rejected |
+| status | varchar | reviewed, applied, won, lost, archived |
 
 **Purpose:** Per-user status on each project (e.g., "applied" when user submits proposal).
 
@@ -314,7 +319,10 @@ flowchart LR
 | project_id | uuid | FK → projects |
 | strategy_id | uuid | FK → bidding_strategies |
 | title, description | text | Proposal content |
-| status | varchar | draft, sent, won, lost |
+| status | varchar | draft, submitted, accepted, rejected, withdrawn |
+| source | varchar | manual, auto_generated |
+| recipient_email | varchar | Recipient email address |
+| job_identifier | varchar | External/hashed job id for duplicate-apply checks |
 | generated_with_ai | boolean | AI-generated flag |
 
 **Purpose:** Proposals created for projects, optionally using a strategy.
@@ -386,4 +394,4 @@ flowchart TB
 
 ---
 
-*Generated from Auto-Bidder schema. See `docs/todos/autobidder-etl-rag-schema-spec.md` for full ETL/RAG spec.*
+*Generated from Auto-Bidder schema. Primary DDL source is `database/migrations/001_initial_schema.sql`.*

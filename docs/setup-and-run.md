@@ -23,7 +23,8 @@ docker-compose up -d
 Apply migrations:
 ```bash
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";"
-docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/006_custom_auth_users.sql
+docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/001_initial_schema.sql
+docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/016_remove_scoring_artifacts.sql
 ```
 
 ---
@@ -83,7 +84,7 @@ npm run dev
 2. **Strategies** — Create proposal tone (professional, casual, technical)
 3. **Projects** → Discover Jobs → Generate Proposal on a job card → AI draft
 
-See [proposal-workflow-ui.md](proposal-workflow-ui.md) for the full flow.
+See [proposals.md](proposals.md) for the full flow.
 
 ---
 

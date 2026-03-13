@@ -79,7 +79,6 @@ async def get_autonomous_status(
             last_run_at=last_run_at,
             status=run.get("status"),
             jobs_discovered=int(run.get("jobs_discovered") or 0),
-            jobs_qualified=int(run.get("jobs_qualified") or 0),
             proposals_auto_generated=int(run.get("proposals_generated") or 0),
             notifications_sent=int(run.get("notifications_sent") or 0),
             errors=errors,

@@ -741,23 +741,6 @@ export async function getProposal(proposalId: string): Promise<any | null> {
   return data
 }
 
-export interface ProposalQuality {
-  overall_score?: number
-  dimension_scores?: Record<string, number>
-  suggestions?: string[]
-  word_count?: number
-}
-
-export async function getProposalQuality(
-  proposalId: string
-): Promise<ProposalQuality | null> {
-  const backend = getBackendUrl()
-  const { data } = await apiClient.get<ProposalQuality>(
-    `${backend}/api/proposals/${proposalId}/quality`
-  )
-  return data
-}
-
 export async function createProposal(proposalData: any): Promise<any | null> {
   const backend = getBackendUrl()
   const { data, error } = await apiClient.post<any>(
@@ -819,7 +802,6 @@ export interface GeneratedProposal {
   skills?: string[]
   ai_model?: string
   strategy_id?: string
-  confidence_score?: number
 }
 
 export async function generateProposalFromJob(

@@ -102,18 +102,18 @@ uvicorn app.main:app --reload --port 8000
 |-------|-------------|
 | [Setup & Run](./docs/setup-and-run.md) | 10-minute quickstart |
 | [User Guide](./docs/user-guides.md) | How to use the platform |
-| [Proposal Workflow](./docs/proposal-workflow-ui.md) | End-to-end proposal generation |
+| [Proposals](./docs/proposals.md) | Proposal workflow & AI generation |
 | [Email System](./docs/email-system.md) | Email config & troubleshooting |
 | [Auth Setup](./docs/setup-auth.md) | JWT authentication |
 | [Architecture](./docs/diagrams/) | System diagrams |
 
-📄 [Full documentation index](./docs/readme.md)
+📄 [Full documentation index](./docs/README.md)
 
 ## 🚢 Deployment
 
 **Frontend:** Vercel • **Backend:** Railway/Fly.io • **Database:** PostgreSQL
 
-📄 [Railway deployment guide (Recommended)](./docs/railway-deployment-guide.md) | [Production deployment guide](./docs/production-deployment.md)
+📄 [Railway deployment guide](./docs/railway-deployment-guide.md)
 
 ## 📄 License
 
@@ -121,7 +121,7 @@ uvicorn app.main:app --reload --port 8000
 
 ## 🔗 Links
 
-- [Documentation](./docs/readme.md)
+- [Documentation](./docs/README.md)
 
 ---
 

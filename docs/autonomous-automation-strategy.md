@@ -30,7 +30,7 @@ This document outlines a comprehensive strategy to transform the Auto-Bidder pla
 ### Critical Gaps for Autonomy
 - ❌ **No autonomous job monitoring** - Manual "Discover Jobs" button
 - ❌ **Single-agent RAG** - Simple similarity search, no multi-hop reasoning
-- ❌ **No qualification logic** - No automated job filtering/scoring
+- ❌ **No qualification logic** - No automated job filtering/prioritization
 - ❌ **Manual submission** - Copy-paste workflow to platforms
 - ❌ **No feedback loop** - No learning from proposal outcomes
 - ❌ **No orchestration** - No multi-agent coordination
@@ -109,31 +109,27 @@ tools = [
 
 ### 2. **QUALIFICATION AGENT** - Intelligent Opportunity Filter
 
-**Framework**: LangGraph with custom scoring logic  
+**Framework**: LangGraph with custom rule logic  
 **Execution**: Event-driven (triggered on new job discovery)
 
 **Capabilities**:
-- Multi-dimensional job scoring (skill match, budget fit, competition, client quality)
+- Multi-dimensional job qualification (skill match, budget fit, competition, client quality)
 - User preference learning (implicit from past wins/bids)
 - Risk assessment (red flags, unclear requirements)
 - Budget-time ROI calculation
 - Auto-reject low-probability jobs
 
-**Scoring Algorithm**:
+**Qualification Logic**:
 ```python
-score = (
-    skill_match_score * 0.35 +      # User skills vs job requirements
-    budget_fit_score * 0.25 +       # Budget alignment with user rates
-    client_quality_score * 0.20 +   # Client rating/history/spending
-    competition_score * 0.10 +      # Number of proposals/bidders
-    win_probability_score * 0.10    # ML model prediction
-)
-
-threshold = user_preferences.auto_bid_threshold  # Default: 0.70
-action = "auto_generate" if score >= threshold else "notify_user"
+if skill_match and budget_fit and client_is_reliable:
+    action = "auto_generate"
+elif skill_match and not blocked_by_risk_rules:
+    action = "notify_user"
+else:
+    action = "skip"
 ```
 
-**Output**: Qualified jobs with confidence scores → Generation Agent
+**Output**: Qualified jobs with rationale tags → Generation Agent
 
 **Implementation Priority**: **P0 (Critical)**
 
@@ -429,10 +425,10 @@ app = workflow.compile()
 
 **Goal**: Auto-filter jobs based on fit and probability
 
-- [ ] Build Qualification Agent scoring algorithm
+- [ ] Build Qualification Agent rule engine
 - [ ] Implement skill matching (user profile vs job requirements)
 - [ ] Add budget fit analysis
-- [ ] Create client quality scoring
+- [ ] Create client quality classifier
 - [ ] Train initial ML model for win probability
 - [ ] Add user-configurable thresholds
 
@@ -463,7 +459,7 @@ app = workflow.compile()
 - [ ] Implement CrewAI proposal generation crew
 - [ ] Create specialized agents (Researcher, RAG, Writer, Reviewer)
 - [ ] Define agent tools and communication protocols
-- [ ] Add proposal quality scoring
+- [ ] Add proposal quality checks
 - [ ] Implement citation verification
 - [ ] Add style/tone consistency checks
 
@@ -571,7 +567,7 @@ class LLMRouter:
             "provider": "openai",
             "model": "gpt-4o-mini",
             "cost_per_1k": 0.00015,
-            "use_for": ["qualification scoring", "summary generation"]
+            "use_for": ["qualification", "summary generation"]
         },
         "advanced": {
             "provider": "openai",
@@ -608,7 +604,7 @@ class LLMRouter:
 
 - **Discovery Efficiency**: Jobs discovered per hour (target: 50+)
 - **Qualification Accuracy**: % of qualified jobs that convert to interviews (target: >30%)
-- **Proposal Quality**: Average review score (target: >4.5/5)
+- **Proposal Quality**: Average review rating (target: >4.5/5)
 - **Submission Success**: % of submissions without errors (target: >98%)
 - **Win Rate Improvement**: % increase in win rate post-automation (target: +25%)
 - **Time Reduction**: Human hours saved per week (target: 20+ hours)
@@ -626,7 +622,7 @@ For fastest time-to-value, implement in this order:
 
 1. **Week 1**: LangGraph orchestrator + Celery background jobs
 2. **Week 2**: Discovery Agent (start with API-based sources, add scraping later)
-3. **Week 3**: Qualification Agent (simple scoring, no ML initially)
+3. **Week 3**: Qualification Agent (simple rules, no ML initially)
 4. **Week 4**: Multi-agent generation (CrewAI crew with 3 agents)
 5. **Week 5**: Testing and refinement
 

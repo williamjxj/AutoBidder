@@ -164,27 +164,11 @@ class AIService:
                     title = title_part
                     content = parts[1].strip() if len(parts) > 1 else content
 
-            # T032: Score proposal quality (FR-009)
-            try:
-                from app.services.proposal_quality_service import score_proposal
-                quality = score_proposal(
-                    content,
-                    request.job_description,
-                    request.job_skills or [],
-                )
-            except Exception as qe:
-                logger.warning("Proposal quality scoring failed: %s", qe)
-                quality = None
-
             return GeneratedProposal(
                 title=title,
                 description=content,
                 ai_model=settings.openai_completion_model if self.llm_provider == "openai" else settings.deepseek_model,
                 strategy_id=str(strategy.id),
-                confidence_score=0.9,  # Placeholder
-                quality_score=quality["overall_score"] if quality else None,
-                quality_breakdown=quality["dimension_scores"] if quality else None,
-                quality_suggestions=quality["suggestions"] if quality else None,
             )
 
         except Exception as e:

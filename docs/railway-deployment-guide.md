@@ -148,9 +148,7 @@ railway connect Postgres
 
 # Once connected, run migrations
 \i database/migrations/001_initial_schema.sql
-\i database/migrations/002_add_huggingface_etl.sql
-\i database/migrations/003_add_freelancer_etl.sql
-\i database/migrations/004_workflow_optimization.sql
+\i database/migrations/016_remove_scoring_artifacts.sql
 \q
 ```
 
@@ -161,9 +159,7 @@ railway variables --json | jq -r '.DATABASE_URL'
 
 # Run migrations
 psql "$DATABASE_URL" < database/migrations/001_initial_schema.sql
-psql "$DATABASE_URL" < database/migrations/002_add_huggingface_etl.sql
-psql "$DATABASE_URL" < database/migrations/003_add_freelancer_etl.sql
-psql "$DATABASE_URL" < database/migrations/004_workflow_optimization.sql
+psql "$DATABASE_URL" < database/migrations/016_remove_scoring_artifacts.sql
 ```
 
 **Option C: Create a Migration Script**

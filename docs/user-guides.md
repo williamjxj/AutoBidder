@@ -69,4 +69,4 @@ Review the proposal, edit if needed, then click **Submit Proposal**. The proposa
 
 ---
 
-**Related:** [ai-proposal-generation-concepts.md](ai-proposal-generation-concepts.md) | [proposal-workflow-ui.md](proposal-workflow-ui.md) | [huggingface-job-discovery.md](huggingface-job-discovery.md)
+**Related:** [ai-proposal-generation-concepts.md](ai-proposal-generation-concepts.md) | [proposals.md](proposals.md) | [huggingface-job-discovery.md](huggingface-job-discovery.md)

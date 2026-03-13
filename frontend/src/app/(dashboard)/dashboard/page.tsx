@@ -258,7 +258,7 @@ export default function DashboardPage() {
               <DocLink
                 title="Proposal Workflow"
                 description="Step-by-step proposal creation"
-                href="/docs/proposal-workflow-ui"
+                href="/docs/proposals"
               />
               <DocLink
                 title="Job Discovery"
