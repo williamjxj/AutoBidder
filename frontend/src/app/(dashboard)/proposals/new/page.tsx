@@ -83,8 +83,18 @@ function NewProposalPageContent() {
   const [keywords, setKeywords] = useState<{ id: string; keyword: string }[]>([])
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // Stable jobId for effect deps – avoids searchParams reference changes causing re-run storms
-  const jobId = searchParams.get('jobId')
+  const normalizeQueryId = (value: string | null): string | null => {
+    if (!value) return null
+    const normalized = value.trim()
+    if (!normalized) return null
+    const lower = normalized.toLowerCase()
+    if (lower === 'null' || lower === 'undefined') return null
+    return normalized
+  }
+
+  // Stable query params for effect deps – avoid calling APIs with invalid IDs like "null"
+  const jobId = normalizeQueryId(searchParams.get('jobId'))
+  const editId = normalizeQueryId(searchParams.get('editId'))
 
   // Load job context from sessionStorage (cache) or API by jobId – avoids passing model_response in URL
   useEffect(() => {
@@ -157,8 +167,6 @@ function NewProposalPageContent() {
     if (!isAIGenerating || !descriptionRef.current) return
     descriptionRef.current.scrollTop = descriptionRef.current.scrollHeight
   }, [formData.description, isAIGenerating])
-
-  const editId = searchParams.get('editId')
 
   const getSafeDraftId = (id: string | null) => {
     if (!id || id === 'new') return 'new'

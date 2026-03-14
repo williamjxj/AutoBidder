@@ -22,7 +22,7 @@ export default function DashboardLayout({
       <ToastProvider>
         <SidebarProvider>
         <BrowserNavigationHandler />
-        <div className="flex min-h-screen">
+        <div className="flex h-screen overflow-hidden">
         <AppSidebar />
         <div className="flex flex-1 flex-col">
           <TopHeader />

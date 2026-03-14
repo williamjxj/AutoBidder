@@ -87,7 +87,7 @@ export function AppSidebar() {
     {/* Desktop sidebar - hidden on mobile */}
     <aside
       className={cn(
-        'hidden md:flex shrink-0 flex-col border-r bg-card transition-[width] duration-300 ease-out',
+        'sticky top-0 hidden h-screen shrink-0 md:flex flex-col border-r bg-card transition-[width] duration-300 ease-out',
         desktopCollapsed ? 'w-20' : 'w-64'
       )}
     >
