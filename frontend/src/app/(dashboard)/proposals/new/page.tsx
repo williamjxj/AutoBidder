@@ -8,7 +8,7 @@
 
 'use client'
 
-import { Suspense, useState, useEffect, useMemo } from 'react'
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { Loader2, Send, Save, X } from 'lucide-react'
 import {
+  generateProposalFromJob,
   getProject,
   listStrategies,
   listKeywords,
@@ -80,6 +81,7 @@ function NewProposalPageContent() {
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null)
   const [selectedCollections, setSelectedCollections] = useState<string>('all') // 'all' | collection name
   const [keywords, setKeywords] = useState<{ id: string; keyword: string }[]>([])
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Stable jobId for effect deps – avoids searchParams reference changes causing re-run storms
   const jobId = searchParams.get('jobId')
@@ -118,7 +120,7 @@ function NewProposalPageContent() {
       // Extract email from job description
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
       const emailMatch = (p.description || '').match(emailRegex)
-      const extractedEmail = emailMatch ? emailMatch[0] : process.env.NEXT_PUBLIC_DEFAULT_PROPOSAL_EMAIL || 'bestitconsultingca@gmail.com'
+      const extractedEmail = emailMatch ? emailMatch[0] : ''
 
       setFormData((prev) => ({
         ...prev,
@@ -149,6 +151,12 @@ function NewProposalPageContent() {
       if (project) applyProject(project)
     })
   }, [jobId])
+
+  // Keep streamed content visible by auto-scrolling to the latest line.
+  useEffect(() => {
+    if (!isAIGenerating || !descriptionRef.current) return
+    descriptionRef.current.scrollTop = descriptionRef.current.scrollHeight
+  }, [formData.description, isAIGenerating])
 
   const editId = searchParams.get('editId')
 
@@ -189,7 +197,7 @@ function NewProposalPageContent() {
             budget: p.budget || '',
             timeline: p.timeline || '',
             skills: Array.isArray(p.skills) ? p.skills.join(', ') : '',
-            recipientEmail: p.recipient_email || process.env.NEXT_PUBLIC_DEFAULT_PROPOSAL_EMAIL || 'bestitconsultingca@gmail.com',
+            recipientEmail: p.recipient_email || '',
           })
           if (p.job_id) {
             setJobContext({
@@ -234,7 +242,7 @@ function NewProposalPageContent() {
           budget: draftData.budget || '',
           timeline: draftData.timeline || '',
           skills: draftData.skills || '',
-          recipientEmail: draftData.recipientEmail || process.env.NEXT_PUBLIC_DEFAULT_PROPOSAL_EMAIL || 'bestitconsultingca@gmail.com',
+          recipientEmail: draftData.recipientEmail || '',
         })
 
         if (draftData.jobId) {
@@ -259,7 +267,7 @@ function NewProposalPageContent() {
         budget: '',
         timeline: '',
         skills: '',
-        recipientEmail: process.env.NEXT_PUBLIC_DEFAULT_PROPOSAL_EMAIL || 'bestitconsultingca@gmail.com',
+        recipientEmail: '',
       })
     },
   })
@@ -414,15 +422,7 @@ function NewProposalPageContent() {
     setAiError(null)
 
     try {
-      setFormData((prev) => ({
-        ...prev,
-        description: '',
-      }))
-
-      let streamError: string | null = null
-
-      await streamProposalFromJob(
-        {
+      const requestPayload = {
         job_id: jobContext.id,
         job_title: jobContext.title,
         job_description: jobContext.description,
@@ -434,36 +434,61 @@ function NewProposalPageContent() {
           selectedCollections && selectedCollections !== 'all'
             ? [selectedCollections]
             : undefined,
-        },
-        (event: ProposalStreamEvent) => {
-          if (event.type === 'token') {
-            setFormData((prev) => ({
-              ...prev,
-              description: `${prev.description}${event.token}`,
-            }))
-            return
-          }
+      }
 
-          if (event.type === 'done' && event.result) {
-            setFormData((prev) => ({
-              ...prev,
-              title: event.result?.title || prev.title,
-              description: event.result?.description || prev.description,
-              budget: event.result?.budget || prev.budget,
-              timeline: event.result?.timeline || prev.timeline,
-              skills: event.result?.skills?.join(', ') || prev.skills,
-            }))
-            return
-          }
+      const canStream = typeof streamProposalFromJob === 'function'
+      if (canStream) {
+        setFormData((prev) => ({
+          ...prev,
+          description: '',
+        }))
 
-          if (event.type === 'error') {
-            streamError = event.error || 'Failed to generate proposal'
+        let streamError: string | null = null
+
+        await streamProposalFromJob(
+          requestPayload,
+          (event: ProposalStreamEvent) => {
+            if (event.type === 'token') {
+              setFormData((prev) => ({
+                ...prev,
+                description: `${prev.description}${event.token}`,
+              }))
+              return
+            }
+
+            if (event.type === 'done' && event.result) {
+              setFormData((prev) => ({
+                ...prev,
+                title: event.result?.title || prev.title,
+                description: event.result?.description || prev.description,
+                budget: event.result?.budget || prev.budget,
+                timeline: event.result?.timeline || prev.timeline,
+                skills: event.result?.skills?.join(', ') || prev.skills,
+              }))
+              return
+            }
+
+            if (event.type === 'error') {
+              streamError = event.error || 'Failed to generate proposal'
+            }
           }
+        )
+
+        if (streamError) {
+          throw new Error(streamError)
         }
-      )
-
-      if (streamError) {
-        throw new Error(streamError)
+      } else {
+        const generated = await generateProposalFromJob(requestPayload)
+        if (generated) {
+          setFormData((prev) => ({
+            ...prev,
+            title: generated.title,
+            description: generated.description,
+            budget: generated.budget || prev.budget,
+            timeline: generated.timeline || prev.timeline,
+            skills: generated.skills?.join(', ') || prev.skills,
+          }))
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate proposal'
@@ -691,10 +716,10 @@ function NewProposalPageContent() {
                     value={selectedStrategyId || ''}
                     onValueChange={(v) => setSelectedStrategyId(v || null)}
                   >
-                    <SelectTrigger className="w-50 h-9 text-xs min-w-[200px]">
+                    <SelectTrigger className="w-50 h-9 text-xs min-w-50">
                       <SelectValue placeholder="Select strategy" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
+                    <SelectContent className="max-h-75">
                       {strategies.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}{s.is_default ? ' (default)' : ''}
@@ -710,7 +735,7 @@ function NewProposalPageContent() {
                     value={selectedCollections}
                     onValueChange={setSelectedCollections}
                   >
-                    <SelectTrigger className="w-50 h-9 text-xs min-w-[180px]">
+                    <SelectTrigger className="w-50 h-9 text-xs min-w-45">
                       <SelectValue placeholder="Select collection" />
                     </SelectTrigger>
                     <SelectContent>
@@ -777,13 +802,18 @@ function NewProposalPageContent() {
             )}
           </Label>
           <Textarea
+            ref={descriptionRef}
             id="description"
             value={formData.description}
             onChange={(e) => handleChange('description', e.target.value)}
             required
-            rows={8}
+            rows={14}
             placeholder="Describe your approach, methodology, and what makes your proposal unique"
-            className="mt-2"
+            className={cn(
+              'mt-2 min-h-80 resize-y',
+              isAIGenerating &&
+                'border-primary ring-2 ring-primary/30 bg-primary/5 focus-visible:ring-primary/40'
+            )}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Minimum 100 characters (currently: {formData.description.length})
@@ -793,10 +823,7 @@ function NewProposalPageContent() {
         {/* Budget & Timeline */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="budget" className="flex items-center gap-1.5">
-              Budget
-              <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-            </Label>
+            <Label htmlFor="budget">Budget</Label>
             <Input
               type="text"
               id="budget"
@@ -807,10 +834,7 @@ function NewProposalPageContent() {
             />
           </div>
           <div>
-            <Label htmlFor="timeline" className="flex items-center gap-1.5">
-              Timeline
-              <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-            </Label>
+            <Label htmlFor="timeline">Timeline</Label>
             <Input
               type="text"
               id="timeline"
@@ -824,27 +848,23 @@ function NewProposalPageContent() {
 
         {/* Recipient Email */}
         <div>
-          <Label htmlFor="recipientEmail">Recipient Email *</Label>
+          <Label htmlFor="recipientEmail">Recipient Email</Label>
           <Input
             type="email"
             id="recipientEmail"
             value={formData.recipientEmail}
             onChange={(e) => handleChange('recipientEmail', e.target.value)}
-            required
             placeholder="customer@example.com"
             className="mt-2"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Email address where the proposal will be sent. Auto-detected from job description.
+            Email address where the proposal will be sent. Auto-filled only when detected from job description.
           </p>
         </div>
 
         {/* Skills */}
         <div>
-          <Label htmlFor="skills" className="flex items-center gap-1.5">
-            Required Skills
-            <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </Label>
+          <Label htmlFor="skills">Required Skills</Label>
           <Input
             type="text"
             id="skills"
