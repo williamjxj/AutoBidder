@@ -108,6 +108,7 @@ function NewProposalPageContent() {
       platform?: string
       skills?: string[]
       budget?: { min?: number; max?: number }
+      test_email?: string
       model_response?: string
     }) => {
       const skillsStr = Array.isArray(p.skills) ? p.skills.join(', ') : ''
@@ -127,10 +128,11 @@ function NewProposalPageContent() {
         model_response: p.model_response,
       })
 
-      // Extract email from job description
+      // Prefer persisted project email (manual upload), fallback to description extraction.
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
       const emailMatch = (p.description || '').match(emailRegex)
       const extractedEmail = emailMatch ? emailMatch[0] : ''
+      const recipientEmail = (p.test_email || extractedEmail || '').trim()
 
       setFormData((prev) => ({
         ...prev,
@@ -138,7 +140,7 @@ function NewProposalPageContent() {
         budget: budgetStr || prev.budget,
         skills: skillsStr || prev.skills,
         description: prev.description || `I am interested in your project "${p.title}". `,
-        recipientEmail: extractedEmail,
+        recipientEmail: recipientEmail || prev.recipientEmail,
       }))
     }
 
@@ -866,7 +868,7 @@ function NewProposalPageContent() {
             className="mt-2"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Email address where the proposal will be sent. Auto-filled only when detected from job description.
+            Email address where the proposal will be sent. Auto-filled from project email when available, otherwise detected from job description.
           </p>
         </div>
 

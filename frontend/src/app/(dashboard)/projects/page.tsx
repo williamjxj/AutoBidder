@@ -886,7 +886,8 @@ export default function ProjectsPage() {
   const [filters, setFiltersState] = useState<PageProjectFilters>({
     search: savedFilters.search || '',
     skills: savedFilters.skills || [],
-    platforms: savedFilters.platforms || [],
+    // Platform filter UI is currently hidden; keep this empty to avoid stale session filters.
+    platforms: [],
     minBudget: savedFilters.minBudget,
     maxBudget: savedFilters.maxBudget,
     category: savedFilters.category || '',
@@ -896,7 +897,8 @@ export default function ProjectsPage() {
   const [appliedFilters, setAppliedFilters] = useState<PageProjectFilters>(() => ({
     search: savedFilters.search || '',
     skills: savedFilters.skills || [],
-    platforms: savedFilters.platforms || [],
+    // Platform filter UI is currently hidden; keep this empty to avoid stale session filters.
+    platforms: [],
     minBudget: savedFilters.minBudget,
     maxBudget: savedFilters.maxBudget,
     category: savedFilters.category || '',

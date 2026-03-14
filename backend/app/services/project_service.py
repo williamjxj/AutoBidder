@@ -17,6 +17,11 @@ from app.models.job import JobRecord
 logger = logging.getLogger(__name__)
 
 
+def _split_search_terms(search: str) -> List[str]:
+    """Split search text into comma/whitespace-separated terms."""
+    return [term for term in search.replace(",", " ").split() if term]
+
+
 def _parse_posted_at(value: Any) -> Optional[datetime]:
     """Parse posted_at from str or datetime to datetime for asyncpg."""
     if value is None:
@@ -132,14 +137,16 @@ async def list_projects(
     idx = 1
 
     if search:
-        keywords = [k.strip() for k in search.split(",") if k.strip()]
+        keywords = _split_search_terms(search)
         if keywords:
             or_parts = []
             for kw in keywords:
                 params.append(f"%{kw}%")
-                # Match title, description, or any skill (FR-005, FR-006)
+                # Match title/description/company/platform/category or any skill.
                 or_parts.append(
                     f"(p.title ILIKE ${idx} OR p.description ILIKE ${idx} OR "
+                    f"p.employer_name ILIKE ${idx} OR p.platform::text ILIKE ${idx} OR "
+                    f"p.category::text ILIKE ${idx} OR "
                     f"EXISTS (SELECT 1 FROM unnest(COALESCE(p.skills_required, ARRAY[]::text[])) AS s WHERE s ILIKE ${idx}))"
                 )
                 idx += 1
@@ -241,8 +248,9 @@ def _row_to_project_dict(
     elif row.get("status"):
         status = row["status"]
 
-    # Extract model_response from raw_payload if available
+    # Extract optional metadata from raw_payload if available
     model_response = None
+    budget_type = "fixed"
     raw_payload = row.get("raw_payload")
     if raw_payload:
         if isinstance(raw_payload, str):
@@ -252,13 +260,19 @@ def _row_to_project_dict(
                 raw_payload = None
         if isinstance(raw_payload, dict):
             model_response = raw_payload.get("model_response")
+            budget_type = raw_payload.get("budget_type") or "fixed"
 
     d: Dict[str, Any] = {
         "id": str(row["id"]),
+        "user_id": str(row["user_id"]) if row.get("user_id") else None,
         "external_id": row.get("external_id"),
         "title": row["title"],
         "description": row["description"],
         "company": row.get("employer_name"),
+        "budget_min": float(row["budget_min"]) if row.get("budget_min") is not None else None,
+        "budget_max": float(row["budget_max"]) if row.get("budget_max") is not None else None,
+        "budget_type": budget_type,
+        "url": row.get("external_url"),
         "skills": row.get("skills_required") or [],
         "budget": {
             "min": float(row["budget_min"]) if row.get("budget_min") is not None else None,
@@ -268,6 +282,8 @@ def _row_to_project_dict(
         "status": status,
         "posted_at": row.get("posted_at").isoformat() if row.get("posted_at") else None,
         "source": row.get("etl_source"),
+        "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+        "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
         "test_email": row.get("test_email"),
         "model_response": model_response,  # AI-generated analysis from HuggingFace dataset
     }
@@ -282,7 +298,7 @@ async def get_stats(keyword_filter: Optional[str] = None) -> Dict[str, Any]:
     total_opportunities = total_data
 
     if keyword_filter:
-        keywords = [k.strip() for k in keyword_filter.split(",") if k.strip()]
+        keywords = _split_search_terms(keyword_filter)
         if keywords:
             or_parts = []
             params: List[Any] = []
@@ -290,6 +306,8 @@ async def get_stats(keyword_filter: Optional[str] = None) -> Dict[str, Any]:
                 params.append(f"%{kw}%")
                 or_parts.append(
                     f"(p.title ILIKE ${i+1} OR p.description ILIKE ${i+1} OR "
+                    f"p.employer_name ILIKE ${i+1} OR p.platform::text ILIKE ${i+1} OR "
+                    f"p.category::text ILIKE ${i+1} OR "
                     f"EXISTS (SELECT 1 FROM unnest(COALESCE(p.skills_required, ARRAY[]::text[])) AS s WHERE s ILIKE ${i+1}))"
                 )
             where_clause = "(" + " OR ".join(or_parts) + ")"
@@ -595,6 +613,10 @@ async def create_manual_project(user_id: str, project_data: Any) -> Dict[str, An
 
     platform = "manual"
     category = "other"  # Default
+    raw_payload = {
+        "source": "manual_upload",
+        "budget_type": project_data.budget_type,
+    }
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -616,10 +638,12 @@ async def create_manual_project(user_id: str, project_data: Any) -> Dict[str, An
             project_data.skills or [],
             project_data.budget_min,
             project_data.budget_max,
-            project_data.budget_type,
+            "USD",
             project_data.company,
             "manual_upload",
             project_data.test_email,
-            None,
+            json.dumps(raw_payload),
         )
-        return _row_to_project_dict(row)
+        project = _row_to_project_dict(row)
+        project["user_id"] = user_id
+        return project
