@@ -63,20 +63,65 @@ export default function ProposalsPage() {
     setIsLoading(true)
     try {
       await measureOperation('load-proposals', async () => {
-        const { listProposals } = await import('@/lib/api/client')
+        const { listProposals, listDrafts } = await import('@/lib/api/client')
 
         const statusFilter = filters.status === 'all' ? undefined : filters.status
-        const response = await listProposals(statusFilter, 100, 0)
+        const [response, draftsResponse] = await Promise.all([
+          listProposals(statusFilter, 100, 0),
+          // Draft list is needed so Projects "View Proposal" and Proposals page stay consistent.
+          listDrafts(),
+        ])
 
-        let filtered = response.proposals
+        const includeDraftWork = filters.status === 'all' || filters.status === 'draft'
+        const draftProposals = includeDraftWork
+          ? (draftsResponse || [])
+              .filter((d: any) => (d.entity_type || d.entityType) === 'proposal')
+              .map((d: any) => {
+                const draftData = d.draftData || d.draft_data || {}
+                const entityId = d.entityId || d.entity_id || draftData.jobId || null
+                const createdAt = d.createdAt || d.created_at || d.updatedAt || d.updated_at || new Date().toISOString()
+                const updatedAt = d.updatedAt || d.updated_at || createdAt
+
+                return {
+                  id: `draft:${d.id}`,
+                  _isDraftWork: true,
+                  _draftEntityId: entityId,
+                  title: draftData.title || draftData.jobTitle || 'Untitled Draft',
+                  description: draftData.description || draftData.jobDescription || '',
+                  project_title: draftData.jobTitle || '',
+                  budget: draftData.budget || '',
+                  timeline: draftData.timeline || '',
+                  job_title: draftData.jobTitle || '',
+                  job_platform: draftData.jobPlatform || '',
+                  client_name: draftData.jobCompany || '',
+                  status: 'draft',
+                  created_at: createdAt,
+                  updated_at: updatedAt,
+                }
+              })
+          : []
+
+        let filtered = [...(response.proposals || []), ...draftProposals]
 
         // Apply Search
         if (filters.search) {
           const searchLower = filters.search.toLowerCase()
-          filtered = filtered.filter(p =>
-            p.title.toLowerCase().includes(searchLower) ||
-            (p.description && p.description.toLowerCase().includes(searchLower))
-          )
+          filtered = filtered.filter((p) => {
+            const fields = [
+              p.title,
+              p.description,
+              p.project_title,
+              p.job_title,
+              p.client_name,
+              p.job_platform,
+              p.budget,
+              p.timeline,
+            ]
+              .filter(Boolean)
+              .map((value: unknown) => String(value).toLowerCase())
+
+            return fields.some((value) => value.includes(searchLower))
+          })
         }
 
         // Apply Platform Filter
@@ -109,8 +154,12 @@ export default function ProposalsPage() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [filters.status, filters.sortBy, filters.platform]) // Reload on key filter changes
+    const timer = window.setTimeout(() => {
+      loadData()
+    }, filters.search ? 250 : 0)
+
+    return () => window.clearTimeout(timer)
+  }, [filters.status, filters.sortBy, filters.platform, filters.search]) // Reload on key filter/search changes
 
   // Restoring scroll position
   useEffect(() => {
@@ -127,20 +176,37 @@ export default function ProposalsPage() {
     setFilters(filters)
   }, [filters, setFilters])
 
-  const handleProposalClick = (proposalId: string) => {
-    updateActiveEntity('proposal', proposalId)
-    router.push(`/proposals/${proposalId}`)
+  const handleProposalClick = (proposal: any) => {
+    if (proposal?._isDraftWork) {
+      const draftEntityId = proposal._draftEntityId
+      updateActiveEntity('proposal', draftEntityId || null)
+      if (draftEntityId) {
+        router.push(`/proposals/new?jobId=${encodeURIComponent(draftEntityId)}`)
+      } else {
+        router.push('/proposals/new')
+      }
+      return
+    }
+
+    updateActiveEntity('proposal', proposal.id)
+    router.push(`/proposals/${proposal.id}`)
   }
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, proposal: any) => {
     e.stopPropagation()
     if (!confirm('Are you sure you want to delete this proposal?')) return
 
-    setIsDeleting(id)
+    setIsDeleting(proposal.id)
     try {
-      await deleteProposal(id)
-      toast.success('Proposal deleted')
-      setProposals(prev => prev.filter(p => p.id !== id))
+      if (proposal?._isDraftWork) {
+        const { discardDraft } = await import('@/lib/api/client')
+        await discardDraft('proposal', proposal._draftEntityId || 'new')
+        toast.success('Draft deleted')
+      } else {
+        await deleteProposal(proposal.id)
+        toast.success('Proposal deleted')
+      }
+      setProposals(prev => prev.filter(p => p.id !== proposal.id))
     } catch (error) {
       toast.error('Failed to delete')
     } finally {
@@ -220,6 +286,7 @@ export default function ProposalsPage() {
               <option value="upwork">Upwork</option>
               <option value="freelancer">Freelancer</option>
               <option value="huggingface">HuggingFace</option>
+              <option value="manual">Manual</option>
             </select>
           </div>
 
@@ -255,7 +322,7 @@ export default function ProposalsPage() {
           proposals.map((proposal) => (
             <Card
               key={proposal.id}
-              onClick={() => handleProposalClick(proposal.id)}
+              onClick={() => handleProposalClick(proposal)}
               className="group cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-primary/30 border-slate-200 dark:border-slate-800 overflow-hidden relative"
             >
               {/* Highlight bar on the left */}
@@ -307,7 +374,7 @@ export default function ProposalsPage() {
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:bg-destructive/10"
-                      onClick={(e) => handleDelete(e, proposal.id)}
+                      onClick={(e) => handleDelete(e, proposal)}
                       disabled={isDeleting === proposal.id}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -316,6 +383,14 @@ export default function ProposalsPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t flex flex-wrap items-center gap-y-2 gap-x-6 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {(proposal.project_title || proposal.job_title) && (
+                    <div className="flex items-center gap-1.5">
+                      <Briefcase className="h-3.5 w-3.5 text-violet-600" />
+                      <span className="truncate max-w-[300px]">
+                        Linked Project: {proposal.project_title || proposal.job_title}
+                      </span>
+                    </div>
+                  )}
                   {proposal.budget && (
                     <div className="flex items-center gap-1.5">
                       <DollarSign className="h-3.5 w-3.5 text-green-600" />

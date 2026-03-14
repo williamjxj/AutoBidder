@@ -40,9 +40,9 @@ async def list_drafts(
     """List all user's drafts."""
     try:
         user_id = current_user.id
-        
+
         drafts = await draft_manager.list_drafts(user_id)
-        
+
         return DraftListResponse(
             drafts=drafts,
             count=len(drafts),
@@ -76,18 +76,18 @@ async def get_draft(
     """Get specific draft."""
     try:
         user_id = current_user.id
-        
+
         # Handle "new" as null entity_id
         parsed_entity_id = None if entity_id == "new" else entity_id
-        
+
         draft = await draft_manager.get_draft(user_id, entity_type, parsed_entity_id)
-        
+
         if not draft:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Draft not found for {entity_type}:{entity_id}",
             )
-        
+
         return draft
     except HTTPException:
         raise
@@ -114,15 +114,15 @@ async def save_draft(
 ) -> Draft:
     """
     Save draft with conflict detection.
-    
+
     Returns 409 Conflict if version mismatch detected.
     """
     try:
         user_id = current_user.id
-        
+
         # Handle "new" as null entity_id
         parsed_entity_id = None if entity_id == "new" else entity_id
-        
+
         # Validate entity_type
         valid_types = ["proposal", "project", "strategy", "keyword"]
         if entity_type not in valid_types:
@@ -130,7 +130,7 @@ async def save_draft(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid entity_type. Must be one of: {', '.join(valid_types)}",
             )
-        
+
         # Save draft with conflict detection
         draft = await draft_manager.save_draft(
             user_id,
@@ -138,14 +138,14 @@ async def save_draft(
             parsed_entity_id,
             draft_request,
         )
-        
+
         return draft
     except HTTPException:
         raise
     except ConflictError as e:
         # Return 409 Conflict response
         logger.warning(f"Draft conflict detected: {e.details}")
-        
+
         # Get current server draft for conflict response
         try:
             server_draft = await draft_manager.get_draft(
@@ -155,7 +155,7 @@ async def save_draft(
             )
         except Exception:
             server_draft = None
-        
+
         conflict_response = DraftConflictResponse(
             error="Version conflict detected",
             conflict={
@@ -166,10 +166,10 @@ async def save_draft(
             },
             server_draft=server_draft,
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=conflict_response.model_dump(),
+            detail=conflict_response.model_dump(mode="json"),
         )
     except AutoBidderError as e:
         logger.error(f"Error saving draft: {e}")
@@ -197,12 +197,12 @@ async def delete_draft(
     """Delete draft."""
     try:
         user_id = current_user.id
-        
+
         # Handle "new" as null entity_id
         parsed_entity_id = None if entity_id == "new" else entity_id
-        
+
         await draft_manager.delete_draft(user_id, entity_type, parsed_entity_id)
-        
+
         return None
     except HTTPException:
         raise
@@ -224,12 +224,12 @@ async def cleanup_expired_drafts(
 ) -> DraftCleanupResult:
     """
     Clean up expired drafts.
-    
+
     This endpoint should be called by a scheduled job/cron.
     """
     try:
         deleted_count = await draft_manager.cleanup_expired(retention_hours)
-        
+
         return DraftCleanupResult(
             deleted_count=deleted_count,
             retention_hours=retention_hours,

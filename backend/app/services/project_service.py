@@ -604,12 +604,16 @@ async def create_manual_project(user_id: str, project_data: Any) -> Dict[str, An
     Create a project manually (for testing/mock purposes).
     """
     import hashlib
-    import uuid
 
     pool = await get_db_pool()
-    external_id = str(uuid.uuid4())
-    # fingerprint_hash: SHA256(platform+external_id)
-    fingerprint_hash = hashlib.sha256(f"manual{external_id}".encode()).hexdigest()
+
+    # Use stable fingerprint to avoid accidental duplicates from repeated submissions.
+    normalized_title = (project_data.title or "").strip().lower()
+    normalized_desc = (project_data.description or "").strip().lower()
+    normalized_company = (project_data.company or "").strip().lower()
+    fingerprint_input = f"manual|{normalized_title}|{normalized_company}|{normalized_desc}"
+    fingerprint_hash = hashlib.sha256(fingerprint_input.encode()).hexdigest()
+    external_id = f"manual-{fingerprint_hash[:16]}"
 
     platform = "manual"
     category = "other"  # Default
@@ -627,6 +631,16 @@ async def create_manual_project(user_id: str, project_data: Any) -> Dict[str, An
                 budget_min, budget_max, budget_currency,
                 employer_name, etl_source, posted_at, test_email, raw_payload
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14)
+            ON CONFLICT (fingerprint_hash) DO UPDATE SET
+                title = EXCLUDED.title,
+                description = EXCLUDED.description,
+                skills_required = EXCLUDED.skills_required,
+                budget_min = EXCLUDED.budget_min,
+                budget_max = EXCLUDED.budget_max,
+                employer_name = EXCLUDED.employer_name,
+                test_email = EXCLUDED.test_email,
+                raw_payload = EXCLUDED.raw_payload,
+                updated_at = NOW()
             RETURNING *
             """,
             platform,
@@ -647,3 +661,18 @@ async def create_manual_project(user_id: str, project_data: Any) -> Dict[str, An
         project = _row_to_project_dict(row)
         project["user_id"] = user_id
         return project
+
+
+async def delete_manual_project(project_id: str) -> bool:
+    """Delete a manually added project by id. Returns True if deleted."""
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        deleted_id = await conn.fetchval(
+            """
+            DELETE FROM projects
+            WHERE id = $1::uuid AND platform = 'manual'
+            RETURNING id
+            """,
+            project_id,
+        )
+    return deleted_id is not None

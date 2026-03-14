@@ -45,6 +45,8 @@ interface ProposalFormData {
   recipientEmail: string
 }
 
+type RecipientEmailSource = 'project' | 'description' | null
+
 interface JobContext {
   id: string
   title: string
@@ -81,6 +83,7 @@ function NewProposalPageContent() {
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null)
   const [selectedCollections, setSelectedCollections] = useState<string>('all') // 'all' | collection name
   const [keywords, setKeywords] = useState<{ id: string; keyword: string }[]>([])
+  const [recipientEmailSource, setRecipientEmailSource] = useState<RecipientEmailSource>(null)
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
 
   const normalizeQueryId = (value: string | null): string | null => {
@@ -133,6 +136,11 @@ function NewProposalPageContent() {
       const emailMatch = (p.description || '').match(emailRegex)
       const extractedEmail = emailMatch ? emailMatch[0] : ''
       const recipientEmail = (p.test_email || extractedEmail || '').trim()
+      const source: RecipientEmailSource = p.test_email
+        ? 'project'
+        : extractedEmail
+          ? 'description'
+          : null
 
       setFormData((prev) => ({
         ...prev,
@@ -142,11 +150,14 @@ function NewProposalPageContent() {
         description: prev.description || `I am interested in your project "${p.title}". `,
         recipientEmail: recipientEmail || prev.recipientEmail,
       }))
+      if (source) {
+        setRecipientEmailSource(source)
+      }
     }
 
     // 1. Try sessionStorage first (same-tab navigation from projects)
     try {
-      const cached = sessionStorage.getItem(`proposal_job_${jobId}`)
+        const cached = localStorage.getItem(`proposal_job_${jobId}`)
       if (cached) {
         const project = JSON.parse(cached) as Parameters<typeof applyProject>[0]
         if (project?.id && project?.title) {
@@ -159,9 +170,9 @@ function NewProposalPageContent() {
     }
 
     // 2. Fallback: fetch from API (new tab, bookmark, refresh)
-    getProject(jobId).then((project) => {
-      if (project) applyProject(project)
-    })
+      getProject(jobId)
+        .then((project) => { if (project) applyProject(project) })
+        .catch(() => { /* project not in DB — form works without pre-fill */ })
   }, [jobId])
 
   // Keep streamed content visible by auto-scrolling to the latest line.
@@ -870,6 +881,11 @@ function NewProposalPageContent() {
           <p className="text-xs text-muted-foreground mt-1">
             Email address where the proposal will be sent. Auto-filled from project email when available, otherwise detected from job description.
           </p>
+          {formData.recipientEmail && recipientEmailSource && (
+            <p className="text-xs mt-1 text-blue-700 dark:text-blue-300">
+              Source: {recipientEmailSource === 'project' ? 'Manual project email field' : 'Detected in project description'}
+            </p>
+          )}
         </div>
 
         {/* Skills */}

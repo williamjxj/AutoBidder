@@ -23,6 +23,7 @@ import {
 } from '@/hooks/useProjects'
 import type { ProjectFilters } from '@/lib/api/client'
 import type { Project, ProjectStats, DatasetInfo } from '@/lib/api/client'
+import { deleteManualProject } from '@/lib/api/client'
 import { LoadingSkeleton, CardListSkeleton } from '@/components/workflow/progress-overlay'
 import { PageHeader } from '@/components/shared/page-header'
 import { PageContainer } from '@/components/shared/page-container'
@@ -33,7 +34,7 @@ import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/shared/empty-state'
 import { useReduceMotion } from '@/hooks/useReduceMotion'
 import { cn } from '@/lib/utils'
-import { Search, Sparkles, FilePlus, X, Upload, Loader2 } from 'lucide-react'
+import { Search, Sparkles, FilePlus, X, Upload, Loader2, Trash2 } from 'lucide-react'
 
 interface PageProjectFilters {
   search: string
@@ -387,6 +388,7 @@ const ProjectsResults = memo(function ProjectsResults({
   reduceMotion,
   pagination,
   onPageChange,
+  onManualDeleted,
 }: {
   projects: Project[]
   isLoading: boolean
@@ -400,6 +402,7 @@ const ProjectsResults = memo(function ProjectsResults({
     total: number
   }
   onPageChange: (page: number) => void
+  onManualDeleted: () => void
 }) {
   if (isLoading) {
     return <CardListSkeleton count={5} />
@@ -437,6 +440,7 @@ const ProjectsResults = memo(function ProjectsResults({
               project={project}
               highlight={searchHighlight}
               appliedJobIds={appliedJobIds}
+              onManualDeleted={onManualDeleted}
             />
           </motion.div>
         ))}
@@ -499,22 +503,26 @@ function ProjectCard({
   project,
   highlight,
   appliedJobIds = [],
+  onManualDeleted,
 }: {
   project: Project
   highlight: string
   appliedJobIds?: string[]
+  onManualDeleted: () => void
 }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [isDeletingManual, setIsDeletingManual] = useState(false)
   const projectId = project.id || (project as { external_id?: string }).external_id || ''
   const hasApplied = projectId && appliedJobIds.includes(projectId)
+  const isManualProject = (project.platform || '').toLowerCase() === 'manual'
 
   const handleGenerateProposal = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (hasApplied) return
     if (projectId) {
       try {
-        sessionStorage.setItem(`proposal_job_${projectId}`, JSON.stringify(project))
+          localStorage.setItem(`proposal_job_${projectId}`, JSON.stringify(project))
       } catch (_) {
         // Ignore quota/private mode errors
       }
@@ -524,7 +532,28 @@ function ProjectCard({
 
   const handleViewProposal = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (projectId) {
+      router.push(`/proposals/new?jobId=${encodeURIComponent(projectId)}`)
+      return
+    }
     router.push('/proposals')
+  }
+
+  const handleDeleteManual = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!projectId || !isManualProject) return
+    if (!confirm('Delete this manually added project?')) return
+
+    try {
+      setIsDeletingManual(true)
+      await deleteManualProject(projectId)
+      onManualDeleted()
+    } catch (error) {
+      console.error('Failed to delete manual project:', error)
+      alert('Failed to delete manual project. Please try again.')
+    } finally {
+      setIsDeletingManual(false)
+    }
   }
 
   return (
@@ -629,15 +658,30 @@ function ProjectCard({
             </span>
           )}
         </div>
-        {hasApplied ? (
-          <Button variant="outline" onClick={handleViewProposal} title="You already have a draft or submitted proposal for this job">
-            View Proposal
-          </Button>
-        ) : (
-          <Button onClick={handleGenerateProposal}>
-            Generate Proposal
-          </Button>
-        )}
+
+        <div className="flex items-center gap-2">
+          {isManualProject && (
+            <Button
+              variant="outline"
+              onClick={handleDeleteManual}
+              disabled={isDeletingManual}
+              title="Delete manually added project"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {isDeletingManual ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
+
+          {hasApplied ? (
+            <Button variant="outline" onClick={handleViewProposal} title="You have an in-progress draft for this job — click to continue editing">
+              Continue Draft
+            </Button>
+          ) : (
+            <Button onClick={handleGenerateProposal}>
+              Generate Proposal
+            </Button>
+          )}
+        </div>
       </CardFooter>
     </Card>
   )
@@ -1054,6 +1098,10 @@ export default function ProjectsPage() {
                 total: projectsData.total
               } : undefined}
               onPageChange={(p) => setCurrentPage(p)}
+              onManualDeleted={() => {
+                setDiscoverOverride(null)
+                refetch()
+              }}
             />
           )}
         </>

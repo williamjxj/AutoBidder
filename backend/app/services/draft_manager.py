@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 import logging
 import json
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from app.models.draft import (
     Draft,
@@ -35,6 +36,25 @@ class DraftManager:
     def __init__(self) -> None:
         """Initialize draft manager."""
         self.conflict_resolver = ConflictResolver()
+
+    def _normalize_entity_id(self, entity_id: Optional[str]) -> Optional[UUID]:
+        """
+        Normalize incoming entity_id for DB UUID column compatibility.
+
+        Returns None for empty/new values and UUID for valid identifiers.
+        Raises AutoBidderError for invalid UUID strings.
+        """
+        if entity_id is None:
+            return None
+
+        value = str(entity_id).strip()
+        if not value or value.lower() == "new":
+            return None
+
+        try:
+            return UUID(value)
+        except (ValueError, TypeError) as e:
+            raise AutoBidderError(f"Invalid entity_id UUID: {entity_id}") from e
 
     def _row_to_draft(self, row) -> Draft:
         """
@@ -101,6 +121,7 @@ class DraftManager:
             Draft object or None if not found
         """
         try:
+            normalized_entity_id = self._normalize_entity_id(entity_id)
             pool = await get_db_pool()
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -113,7 +134,7 @@ class DraftManager:
                     """,
                     user_id,
                     entity_type,
-                    entity_id
+                    normalized_entity_id
                 )
 
                 if not row:
@@ -147,6 +168,8 @@ class DraftManager:
             AutoBidderError: If save fails or conflict detected
         """
         try:
+            normalized_entity_id = self._normalize_entity_id(entity_id)
+
             # Check for existing draft
             existing = await self.get_draft(user_id, entity_type, entity_id)
 
@@ -193,10 +216,9 @@ class DraftManager:
                         datetime.now(),
                         user_id,
                         entity_type,
-                        entity_id,
+                        normalized_entity_id,
                     )
                 else:
-                    # Insert new draft
                     row = await conn.fetchrow(
                         """
                         INSERT INTO draft_work
@@ -208,7 +230,7 @@ class DraftManager:
                         """,
                         user_id,
                         entity_type,
-                        entity_id,
+                        normalized_entity_id,
                         json.dumps(draft_request.draft_data, ensure_ascii=False),
                         new_version,
                         datetime.now(),
@@ -236,6 +258,7 @@ class DraftManager:
             entity_id: Entity ID (None for new entities)
         """
         try:
+            normalized_entity_id = self._normalize_entity_id(entity_id)
             pool = await get_db_pool()
             async with pool.acquire() as conn:
                 await conn.execute(
@@ -245,7 +268,7 @@ class DraftManager:
                     """,
                     user_id,
                     entity_type,
-                    entity_id
+                    normalized_entity_id
                 )
             logger.info(f"Deleted draft for {entity_type}:{entity_id}")
         except Exception as e:

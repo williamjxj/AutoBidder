@@ -106,11 +106,14 @@ class ApiClient {
       // Handle non-JSON responses (e.g., 404 from Next.js)
       let data: any
       const contentType = response.headers.get('content-type')
-      if (contentType && contentType.includes('application/json')) {
+      if (response.status === 204 || response.status === 205) {
+        // No Content — skip body parsing entirely
+        data = null
+      } else if (contentType && contentType.includes('application/json')) {
         data = await response.json()
       } else {
         // For non-JSON responses (like 404), create a simple error object
-        data = {
+        data = response.ok ? null : {
           error: `Request failed with status ${response.status}`,
           status: response.status,
         }
@@ -290,25 +293,32 @@ export async function saveDraft(
     draftRequest
   )
   if (error) {
-    // Handle error properly - ensure it's always a string
+    // Handle error payloads that might be strings, Error objects, or structured API details.
     let msg = 'Failed to save draft'
     try {
       if (typeof error === 'string') {
         msg = error
       } else if (error && typeof error === 'object') {
-        if ('message' in error && typeof error.message === 'string') {
-          msg = error.message
-        } else if ('toString' in error && typeof error.toString === 'function') {
-          const str = error.toString()
-          msg = typeof str === 'string' ? str : JSON.stringify(error)
+        const e = error as Record<string, unknown>
+        const rawMessage = e.message
+        if (typeof rawMessage === 'string') {
+          msg = rawMessage
+        } else if (rawMessage && typeof rawMessage === 'object') {
+          msg = JSON.stringify(rawMessage)
+        } else if (typeof e.detail === 'string') {
+          msg = e.detail
+        } else if (e.detail && typeof e.detail === 'object') {
+          msg = JSON.stringify(e.detail)
+        } else if ('toString' in e && typeof e.toString === 'function') {
+          const str = e.toString()
+          msg = typeof str === 'string' ? str : JSON.stringify(e)
         } else {
-          msg = JSON.stringify(error)
+          msg = JSON.stringify(e)
         }
       } else if (error != null) {
         msg = String(error)
       }
-    } catch (e) {
-      // If anything fails, use the default message
+    } catch {
       msg = 'Failed to save draft: ' + String(error)
     }
     throw new Error(msg)
@@ -1046,6 +1056,12 @@ export async function createManualProject(projectData: any): Promise<Project | n
   )
   if (error) throw new Error(error)
   return data
+}
+
+export async function deleteManualProject(projectId: string): Promise<void> {
+  const backend = getBackendUrl()
+  const { error } = await apiClient.delete<unknown>(`${backend}/api/projects/manual/${projectId}`)
+  if (error) throw new Error(error)
 }
 
 /**

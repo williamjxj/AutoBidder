@@ -17,8 +17,9 @@ Routes:
 import logging
 import os
 from typing import List, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..config import settings
 from ..models.auth import UserResponse
@@ -191,6 +192,29 @@ async def create_manual_project(
         )
 
 
+@router.delete("/manual/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_manual_project_endpoint(
+    project_id: UUID,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Delete a manually added project."""
+    try:
+        from ..services.project_service import delete_manual_project
+
+        deleted = await delete_manual_project(str(project_id))
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Manual project not found")
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Manual project deletion failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete manual project: {str(e)}"
+        )
+
+
 @router.get("/list", response_model=ProjectListResponse)
 async def list_projects(
     limit: int = Query(50, ge=1, le=200),
@@ -273,6 +297,36 @@ async def list_projects(
                 limit=fetch_limit,
                 keyword_filter=keywords
             )
+
+            # Include manually added projects from DB in HF mode so "Add manually"
+            # entries are discoverable via the same list/search UI.
+            try:
+                manual_jobs, _ = await list_projects_svc(
+                    limit=fetch_limit,
+                    offset=0,
+                    search=filter_search,
+                    platform="manual",
+                    category=category,
+                    status_filter=status,
+                    applied=applied,
+                    user_id=str(current_user.id),
+                    sort_by=sort_by or "date",
+                )
+                jobs.extend(manual_jobs)
+            except Exception as e:
+                logger.debug(f"Could not merge manual DB projects in HF mode: {e}")
+
+            # Deduplicate merged records by stable ID keys.
+            deduped_jobs = []
+            seen_keys = set()
+            for j in jobs:
+                key = j.get("id") or j.get("external_id") or j.get("fingerprint_hash")
+                if key and key in seen_keys:
+                    continue
+                if key:
+                    seen_keys.add(key)
+                deduped_jobs.append(j)
+            jobs = deduped_jobs
 
             # Apply filters
             if platform and platform != "all":

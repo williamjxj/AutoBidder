@@ -16,7 +16,12 @@ def _row_to_proposal(row: dict) -> Proposal:
     return Proposal(
         id=str(row["id"]),
         user_id=str(row["user_id"]),
-        job_id=str(row["project_id"]) if row.get("project_id") else None,
+        job_id=(
+            str(row["project_id"])
+            if row.get("project_id")
+            else (str(row["job_identifier"]) if row.get("job_identifier") else None)
+        ),
+        project_title=row.get("project_title"),
         title=row["title"],
         description=row["description"],
         budget=row["budget"],
@@ -91,16 +96,25 @@ async def list_proposals(
     db = await get_db_pool()
 
     query = """
-        SELECT * FROM proposals
-        WHERE user_id = $1
+        SELECT p.*, pr.title AS project_title
+        FROM proposals p
+        LEFT JOIN projects pr ON pr.id = COALESCE(
+            p.project_id,
+            CASE
+                WHEN p.job_identifier ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                THEN p.job_identifier::uuid
+                ELSE NULL
+            END
+        )
+        WHERE p.user_id = $1
     """
     params = [user_id]
 
     if status:
-        query += f" AND status = ${len(params) + 1}"
+        query += f" AND p.status = ${len(params) + 1}"
         params.append(status)
 
-    query += f" ORDER BY created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
+    query += f" ORDER BY p.created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
     params.extend([limit, offset])
 
     rows = await db.fetch(query, *params)
@@ -403,6 +417,13 @@ async def submit_from_draft(
     if isinstance(draft_data, str):
         draft_data = json.loads(draft_data)
 
+    # Preserve project linkage so submitted proposals stay associated with source project.
+    draft_job_id = (
+        draft_data.get("job_id")
+        or draft_data.get("jobId")
+        or (str(draft_row.get("entity_id")) if draft_row.get("entity_id") else None)
+    )
+
     # Extract skills
     raw_skills = draft_data.get("skills", [])
     if isinstance(raw_skills, str):
@@ -419,6 +440,7 @@ async def submit_from_draft(
             budget=draft_data.get("budget"),
             timeline=draft_data.get("timeline"),
             skills=skills,
+            job_id=draft_job_id,
             job_url=draft_data.get("job_url") or draft_data.get("jobUrl"),
             job_platform=draft_data.get("job_platform") or draft_data.get("jobPlatform"),
             client_name=draft_data.get("client_name") or draft_data.get("jobCompany"),

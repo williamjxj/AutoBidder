@@ -1,6 +1,6 @@
 /**
  * Error Formatter
- * 
+ *
  * Formats backend errors into actionable user messages.
  * Provides "what went wrong", "why it matters", and "how to fix" sections.
  */
@@ -62,9 +62,10 @@ export class ErrorFormatter {
    * Check if error is a network error
    */
   private isNetworkError(error: any): boolean {
+    const message = this.coerceMessage(error).toLowerCase()
     return (
-      error?.message?.includes('fetch') ||
-      error?.message?.includes('network') ||
+      message.includes('fetch') ||
+      message.includes('network') ||
       error?.code === 'ECONNREFUSED' ||
       error?.code === 'NETWORK_ERROR' ||
       !navigator.onLine
@@ -133,7 +134,7 @@ export class ErrorFormatter {
    */
   private formatValidationError(error: any): FormattedError {
     const detail = error?.detail || error?.response?.data?.detail || 'Some fields have invalid values'
-    
+
     return {
       title: 'Invalid Input',
       whatWentWrong: `The information you provided doesn't meet the requirements: ${detail}`,
@@ -242,11 +243,29 @@ export class ErrorFormatter {
   shouldShowToUser(error: any): boolean {
     // Don't show aborted requests
     if (error?.name === 'AbortError') return false
-    
+
     // Don't show cancelled requests
-    if (error?.message?.includes('cancel')) return false
-    
+    const message = this.coerceMessage(error).toLowerCase()
+    if (message.includes('cancel')) return false
+
     return true
+  }
+
+  /**
+   * Safely normalize unknown error payloads into a string message.
+   */
+  private coerceMessage(error: any): string {
+    const msg = error?.message
+    if (typeof msg === 'string') return msg
+    if (msg == null) return ''
+    if (typeof msg === 'object') {
+      try {
+        return JSON.stringify(msg)
+      } catch {
+        return String(msg)
+      }
+    }
+    return String(msg)
   }
 }
 

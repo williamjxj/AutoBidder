@@ -66,6 +66,7 @@ class Proposal(ProposalBase):
     id: str = Field(..., description="UUID primary key")
     user_id: str = Field(..., description="User UUID")
     job_id: Optional[str] = Field(None, description="Linked job UUID when created from Projects page")
+    project_title: Optional[str] = Field(None, description="Linked project title when available")
 
     # Status fields
     status: str = Field(..., description="Proposal status")
