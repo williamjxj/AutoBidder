@@ -36,10 +36,6 @@ def _parse_posted_at(value: Any) -> Optional[datetime]:
     return None
 
 
-# Map hf_dataset to DB enum
-PLATFORM_MAP = {"hf_dataset": "huggingface_dataset"}
-
-
 async def upsert_projects(records: List[JobRecord], etl_source: str = "hf_loader") -> tuple[int, int]:
     """
     Upsert projects by fingerprint_hash. Returns (inserted_count, updated_count).
@@ -49,7 +45,7 @@ async def upsert_projects(records: List[JobRecord], etl_source: str = "hf_loader
     updated = 0
 
     for rec in records:
-        platform = PLATFORM_MAP.get(rec.platform, rec.platform)
+        platform = rec.platform
         if platform not in (
             "upwork", "freelancer", "linkedin", "toptal", "guru",
             "remoteok", "remotive", "huggingface_dataset", "other", "manual"

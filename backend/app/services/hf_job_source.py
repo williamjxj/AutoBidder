@@ -44,7 +44,7 @@ def normalize_hf_job(record: dict, source_dataset: str) -> dict:
             "external_id": hashlib.md5(
                 record.get("job_description", "")[:80].encode()
             ).hexdigest(),
-            "platform": "hf_dataset",
+            "platform": "huggingface_dataset",
             "title": title,
             "company": record.get("company_name", "Unknown Company"),
             "description": record.get("job_description", ""),
@@ -76,7 +76,7 @@ def normalize_hf_job(record: dict, source_dataset: str) -> dict:
             "external_id": str(record.get("job_id", hashlib.md5(
                 str(job_title)[:80].encode()
             ).hexdigest())),
-            "platform": "hf_dataset",
+            "platform": "huggingface_dataset",
             "title": job_title,
             "company": record.get("company_name", ""),
             "description": record.get("job_description", ""),
@@ -101,7 +101,7 @@ def normalize_hf_job(record: dict, source_dataset: str) -> dict:
             "external_id": hashlib.md5(
                 str(record.get("Job Title", ""))[:80].encode()
             ).hexdigest(),
-            "platform": "hf_dataset",
+            "platform": "huggingface_dataset",
             "title": record.get("Job Title", record.get("title", "Unknown Title")),
             "company": record.get("Company", record.get("company", "Tech Company")),
             "description": record.get("Job Description", record.get("description", "")),
@@ -135,7 +135,7 @@ def normalize_hf_job(record: dict, source_dataset: str) -> dict:
         "external_id": hashlib.md5(
             str(title)[:80].encode()
         ).hexdigest(),
-        "platform": "hf_dataset",
+        "platform": "huggingface_dataset",
         "title": title,
         "company": record.get("company", record.get("company_name", "Company")),
         "description": record.get("description", record.get("job_description", "")),

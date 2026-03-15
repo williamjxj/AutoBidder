@@ -33,6 +33,36 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
     description: 'AI-powered proposal workflow and generation',
     githubPath: 'docs/proposals.md',
   },
+  'projects': {
+    title: 'Projects',
+    description: 'Projects loading, discover flow, and multi-source ETL behavior',
+    githubPath: 'docs/projects.md',
+  },
+  'dashboard': {
+    title: 'Dashboard',
+    description: 'Dashboard user guide, metrics, and setup flow',
+    githubPath: 'docs/dashboard.md',
+  },
+  'analytics': {
+    title: 'Analytics',
+    description: 'Analytics page metrics, filters, and interpretation guide',
+    githubPath: 'docs/analytics.md',
+  },
+  'keywords': {
+    title: 'Keywords',
+    description: 'Keyword management for project matching and AI generation',
+    githubPath: 'docs/keywords.md',
+  },
+  'strategies': {
+    title: 'Strategies',
+    description: 'Proposal strategy templates and default behavior',
+    githubPath: 'docs/strategies.md',
+  },
+  'settings': {
+    title: 'Settings',
+    description: 'Preferences and platform credential management',
+    githubPath: 'docs/settings.md',
+  },
   'huggingface-job-discovery': {
     title: 'Job Discovery',
     description: 'HuggingFace dataset integration',
@@ -173,8 +203,15 @@ export default function DocPage({ params }: PageProps) {
                     )}
                     {slug === 'proposals' && (
                       <>
+                        <DocLink title="Projects" href="/docs/projects" />
                         <DocLink title="AI Concepts" href="/docs/ai-proposal-generation-concepts" />
                         <DocLink title="Knowledge Base" href="/docs/knowledge-base" />
+                      </>
+                    )}
+                    {slug === 'projects' && (
+                      <>
+                        <DocLink title="Proposals" href="/docs/proposals" />
+                        <DocLink title="Job Discovery" href="/docs/huggingface-job-discovery" />
                       </>
                     )}
                     {slug === 'ai-proposal-generation-concepts' && (

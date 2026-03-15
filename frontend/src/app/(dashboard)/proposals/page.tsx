@@ -86,9 +86,10 @@ export default function ProposalsPage() {
                   id: `draft:${d.id}`,
                   _isDraftWork: true,
                   _draftEntityId: entityId,
-                  title: draftData.title || draftData.jobTitle || 'Untitled Draft',
+                  proposal_title: draftData.proposalTitle || draftData.proposal_title || draftData.title || draftData.jobTitle || 'Untitled Draft',
+                  title: draftData.proposalTitle || draftData.proposal_title || draftData.title || draftData.jobTitle || 'Untitled Draft',
                   description: draftData.description || draftData.jobDescription || '',
-                  project_title: draftData.jobTitle || '',
+                  project_title: draftData.projectTitle || draftData.project_title || draftData.jobTitle || '',
                   budget: draftData.budget || '',
                   timeline: draftData.timeline || '',
                   job_title: draftData.jobTitle || '',
@@ -108,6 +109,7 @@ export default function ProposalsPage() {
           const searchLower = filters.search.toLowerCase()
           filtered = filtered.filter((p) => {
             const fields = [
+              p.proposal_title,
               p.title,
               p.description,
               p.project_title,
@@ -137,7 +139,7 @@ export default function ProposalsPage() {
             case 'updated':
               return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
             case 'title':
-              return a.title.localeCompare(b.title)
+              return (a.proposal_title || a.title || '').localeCompare(b.proposal_title || b.title || '')
             default:
               return 0
           }
@@ -338,7 +340,7 @@ export default function ProposalsPage() {
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-3">
                       <h3 className="font-bold text-lg group-hover:text-primary transition-colors line-clamp-1">
-                        {proposal.title}
+                        {proposal.proposal_title || proposal.title}
                       </h3>
                       <Badge
                         variant={
@@ -383,11 +385,19 @@ export default function ProposalsPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t flex flex-wrap items-center gap-y-2 gap-x-6 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {(proposal.proposal_title || proposal.title) && (
+                    <div className="flex items-center gap-1.5">
+                      <Edit className="h-3.5 w-3.5 text-indigo-600" />
+                      <span className="truncate max-w-[300px]">
+                        Proposal Title: {proposal.proposal_title || proposal.title}
+                      </span>
+                    </div>
+                  )}
                   {(proposal.project_title || proposal.job_title) && (
                     <div className="flex items-center gap-1.5">
                       <Briefcase className="h-3.5 w-3.5 text-violet-600" />
                       <span className="truncate max-w-[300px]">
-                        Linked Project: {proposal.project_title || proposal.job_title}
+                        Project Title: {proposal.project_title || proposal.job_title}
                       </span>
                     </div>
                   )}

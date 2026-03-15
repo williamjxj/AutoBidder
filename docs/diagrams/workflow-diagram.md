@@ -1,123 +1,73 @@
-# Proposal Generation Workflow
+# Projects and Proposal Workflow
 
-This diagram illustrates the end-to-end workflow for generating AI-powered proposals.
+This diagram reflects the implemented path from project discovery/listing to proposal generation and submission.
 
 ## Workflow Overview
 
 ```mermaid
 graph TB
-    subgraph "1. Input Collection"
-        A[User Inputs]
-        B[Project Details]
-        C[Requirements]
-        D[Budget/Timeline]
-    end
-    
-    subgraph "2. Context Gathering"
-        E[Keyword Extraction]
-        F[Competitive Analysis]
-        G[Web Scraping]
-        H[Knowledge Base Search]
-    end
-    
-    subgraph "3. RAG Processing"
-        I[Vector Store Query]
-        J[Semantic Search]
-        K[Retrieve Past Projects]
-        L[Extract Relevant Context]
-    end
-    
-    subgraph "4. AI Generation"
-        M[Prompt Construction]
-        N[LLM API Call]
-        O[OpenAI/DeepSeek]
-        P[Response streaming]
-    end
-    
-    subgraph "5. Post-Processing"
-        Q[Format Output]
-        R[Apply Strategy]
-        S[Quality Check]
-        T[User Review]
-    end
-    
-    subgraph "6. Finalization"
-        U[User Edits]
-        V[Save Draft]
-        W[Export Document]
-        X[Submit Proposal]
-    end
-    
-    A --> B --> C --> D
-    D --> E
-    E --> F --> G
-    E --> H
-    
-    H --> I --> J
-    J --> K --> L
-    G --> L
-    
-    L --> M --> N
-    N --> O --> P
-    
-    P --> Q --> R
-    R --> S --> T
-    
-    T --> U --> V
-    V --> W --> X
-    
-    style A fill:#00d4ff,stroke:#333,stroke-width:2px
-    style O fill:#10a37f,stroke:#333,stroke-width:2px
-    style X fill:#4caf50,stroke:#333,stroke-width:2px
+    U[User on Projects page]
+    L1["GET /api/projects/list"]
+    D1{ETL_USE_PERSISTENCE}
+    DBR[Read projects from PostgreSQL]
+    HFR[Fetch from HuggingFace adapter]
+    RENDER[Render cards + filters + status badges]
+
+    U --> L1 --> D1
+    D1 -->|true| DBR --> RENDER
+    D1 -->|false| HFR --> RENDER
+
+    U --> DISC["POST /api/projects/discover"]
+    D2{ETL_USE_PERSISTENCE}
+    HFLOAD[HF loader + domain filter]
+    UPSERT[Upsert into projects table]
+    DBRET[Return records from DB]
+    HFDIRECT[Return direct HF results]
+
+    DISC --> D2
+    D2 -->|true| HFLOAD --> UPSERT --> DBRET --> RENDER
+    D2 -->|false| HFDIRECT --> RENDER
+
+    RENDER --> GP[Generate Proposal click]
+    GP --> STORE[Store project context in browser]
+    STORE --> NEWP["/proposals/new"]
+    NEWP --> GEN["POST /api/proposals/generate-from-job"]
+    GEN --> RAG[RAG retrieval from ChromaDB + strategy + keywords]
+    RAG --> LLM[LLM generation]
+    LLM --> EDIT[User review and edit]
+    EDIT --> SAVE["POST /api/proposals (draft/submitted)"]
+
+    style U fill:#61dafb,stroke:#333,stroke-width:2px
+    style DISC fill:#00a896,stroke:#333,stroke-width:2px
+    style UPSERT fill:#f4a261,stroke:#333,stroke-width:2px
+    style SAVE fill:#4caf50,stroke:#333,stroke-width:2px
 ```
 
-## Detailed Workflow Stages
+## Detailed Stages
 
-### 1. Input Collection
-- User provides project title, description, requirements
-- Budget range and timeline constraints
-- Platform-specific details (Upwork, Freelancer, etc.)
+### 1. List and Discover
 
-### 2. Context Gathering
-- **Keyword Extraction**: Extract relevant technical keywords from requirements
-- **Competitive Analysis**: Analyze competing proposals if available
-- **Web Scraping**: Gather real-time market data and trends
-- **Knowledge Base Search**: Query stored documents for relevant context
+- `list` is the default browse/search path.
+- `discover` is explicit fetch for new opportunities.
+- In persistence mode, discover upserts then list reads stable DB state.
 
-### 3. RAG Processing
-- Embed user query into vector space
-- Perform semantic search across ChromaDB vector store
-- Retrieve top-k most relevant past projects (k=5 default)
-- Extract context snippets with metadata
+### 2. Project Context Transfer
 
-### 4. AI Generation
-- Construct optimized prompt with:
-  - System instructions
-  - Retrieved context from RAG
-  - User requirements
-  - Bidding strategy parameters
-- Stream response from OpenAI GPT-4 or DeepSeek
-- Handle token limits and chunking
+- Selected project context is passed into Proposals flow.
+- Applied IDs prevent accidental repeat application actions.
 
-### 5. Post-Processing
-- Format markdown output with proper sections
-- Apply bidding strategy (conservative/standard/aggressive)
-- Quality checks:
-  - Word count validation
-  - Required sections present
-  - Grammar and spelling
-- Present to user for review
+### 3. AI Proposal Generation
 
-### 6. Finalization
-- User can edit generated content in the proposal form
-- Drafts auto-save in background for recovery (24h retention)
-- Submit creates proposal directly from form data (`POST /api/proposals`)
-- Export to PDF/DOCX format (future feature)
+- Knowledge Base retrieval (ChromaDB) + strategy + keywords + job requirements.
+- LLM returns generated sections for editing.
 
-## Key Technologies
+### 4. Save and Submit
 
-- **LangChain**: Orchestration framework for LLM chains
-- **ChromaDB**: Vector database for semantic similarity search
-- **Playwright**: Web scraping for competitive intelligence
-- **FastAPI**: Async API with streaming responses
-- **React**: Interactive UI with real-time updates
+- Draft and submitted proposals persist to database tables.
+- Proposal records are then used by analytics and applied-state signals.
+
+## Related Docs
+
+- [projects.md](../projects.md)
+- [proposals.md](../proposals.md)
+- [huggingface-job-discovery.md](../huggingface-job-discovery.md)

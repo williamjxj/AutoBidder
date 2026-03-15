@@ -1,4 +1,5 @@
 """Service for managing proposals."""
+import json
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -11,8 +12,31 @@ from app.models.proposal import (
 )
 
 
+_PROPOSAL_COLUMNS_CACHE: Optional[set[str]] = None
+
+
+async def _get_proposals_columns(db) -> set[str]:
+    """Return available columns on proposals table (cached per process)."""
+    global _PROPOSAL_COLUMNS_CACHE
+    if _PROPOSAL_COLUMNS_CACHE is not None:
+        return _PROPOSAL_COLUMNS_CACHE
+
+    rows = await db.fetch(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'proposals'
+        """
+    )
+    _PROPOSAL_COLUMNS_CACHE = {str(r["column_name"]) for r in rows}
+    return _PROPOSAL_COLUMNS_CACHE
+
+
 def _row_to_proposal(row: dict) -> Proposal:
     """Convert database row to Proposal model."""
+    proposal_title = row.get("proposal_title") or row.get("title")
+    project_title = row.get("project_title") or row.get("resolved_project_title")
+
     return Proposal(
         id=str(row["id"]),
         user_id=str(row["user_id"]),
@@ -21,8 +45,9 @@ def _row_to_proposal(row: dict) -> Proposal:
             if row.get("project_id")
             else (str(row["job_identifier"]) if row.get("job_identifier") else None)
         ),
-        project_title=row.get("project_title"),
-        title=row["title"],
+        project_title=project_title,
+        title=proposal_title,
+        proposal_title=proposal_title,
         description=row["description"],
         budget=row["budget"],
         timeline=row["timeline"],
@@ -96,7 +121,7 @@ async def list_proposals(
     db = await get_db_pool()
 
     query = """
-        SELECT p.*, pr.title AS project_title
+        SELECT p.*, pr.title AS resolved_project_title
         FROM proposals p
         LEFT JOIN projects pr ON pr.id = COALESCE(
             p.project_id,
@@ -148,46 +173,92 @@ async def create_proposal(
     # when job_id comes from Discover results not persisted to DB)
     project_id_val = None
     job_identifier_val = None
+    project_title_val = (proposal_data.project_title or "").strip() or None
     if proposal_data.job_id:
         job_identifier_val = str(proposal_data.job_id).strip() or None
         try:
             pid = UUID(proposal_data.job_id)
-            exists = await db.fetchval(
-                "SELECT 1 FROM projects WHERE id = $1",
+            project_row = await db.fetchrow(
+                "SELECT id, title FROM projects WHERE id = $1",
                 pid,
             )
-            if exists:
+            if project_row:
                 project_id_val = pid
+                if not project_title_val:
+                    project_title_val = project_row.get("title")
         except (ValueError, TypeError):
             pass
 
-    row = await db.fetchrow(
-        """
-        INSERT INTO proposals (
-            user_id, title, description, budget, timeline, skills,
-            project_id, job_identifier, job_url, job_platform, client_name, recipient_email, strategy_id,
-            generated_with_ai, ai_model_used, status
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        RETURNING *
-        """,
-        user_id,
-        proposal_data.title,
-        proposal_data.description,
-        proposal_data.budget,
-        proposal_data.timeline,
-        proposal_data.skills,
-        project_id_val,
-        job_identifier_val,
-        proposal_data.job_url,
-        proposal_data.job_platform,
-        proposal_data.client_name,
-        proposal_data.recipient_email,
-        UUID(proposal_data.strategy_id) if proposal_data.strategy_id else None,
-        proposal_data.generated_with_ai,
-        proposal_data.ai_model_used,
-        proposal_data.status or "draft",
+    proposal_title_val = (
+        (proposal_data.proposal_title or "").strip()
+        or (proposal_data.title or "").strip()
+        or "Untitled Proposal"
     )
+    if not project_title_val:
+        project_title_val = proposal_title_val
+
+    proposal_columns = await _get_proposals_columns(db)
+    has_proposal_title_col = "proposal_title" in proposal_columns
+    has_project_title_col = "project_title" in proposal_columns
+
+    if has_proposal_title_col and has_project_title_col:
+        row = await db.fetchrow(
+            """
+            INSERT INTO proposals (
+                user_id, title, proposal_title, project_title, description, budget, timeline, skills,
+                project_id, job_identifier, job_url, job_platform, client_name, recipient_email, strategy_id,
+                generated_with_ai, ai_model_used, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            RETURNING *
+            """,
+            user_id,
+            proposal_title_val,
+            proposal_title_val,
+            project_title_val,
+            proposal_data.description,
+            proposal_data.budget,
+            proposal_data.timeline,
+            proposal_data.skills,
+            project_id_val,
+            job_identifier_val,
+            proposal_data.job_url,
+            proposal_data.job_platform,
+            proposal_data.client_name,
+            proposal_data.recipient_email,
+            UUID(proposal_data.strategy_id) if proposal_data.strategy_id else None,
+            proposal_data.generated_with_ai,
+            proposal_data.ai_model_used,
+            proposal_data.status or "draft",
+        )
+    else:
+        row = await db.fetchrow(
+            """
+            INSERT INTO proposals (
+                user_id, title, description, budget, timeline, skills,
+                project_id, job_identifier, job_url, job_platform, client_name, recipient_email, strategy_id,
+                generated_with_ai, ai_model_used, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING *
+            """,
+            user_id,
+            proposal_title_val,
+            proposal_data.description,
+            proposal_data.budget,
+            proposal_data.timeline,
+            proposal_data.skills,
+            project_id_val,
+            job_identifier_val,
+            proposal_data.job_url,
+            proposal_data.job_platform,
+            proposal_data.client_name,
+            proposal_data.recipient_email,
+            UUID(proposal_data.strategy_id) if proposal_data.strategy_id else None,
+            proposal_data.generated_with_ai,
+            proposal_data.ai_model_used,
+            proposal_data.status or "draft",
+        )
 
     proposal = _row_to_proposal(dict(row))
 
@@ -221,6 +292,7 @@ async def create_auto_generated_proposal(
     skills: List[str],
     strategy_id: Optional[str],
     ai_model_used: Optional[str],
+    project_title: Optional[str] = None,
     job_url: Optional[str] = None,
     job_platform: Optional[str] = None,
     client_name: Optional[str] = None,
@@ -231,29 +303,60 @@ async def create_auto_generated_proposal(
     """
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO proposals (
-                user_id, project_id, title, description, budget, timeline, skills,
-                job_url, job_platform, client_name, strategy_id,
-                generated_with_ai, ai_model_used, status, source, auto_generated_at
+        proposal_columns = await _get_proposals_columns(conn)
+        has_proposal_title_col = "proposal_title" in proposal_columns
+        has_project_title_col = "project_title" in proposal_columns
+
+        if has_proposal_title_col and has_project_title_col:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO proposals (
+                    user_id, project_id, title, proposal_title, project_title, description, budget, timeline, skills,
+                    job_url, job_platform, client_name, strategy_id,
+                    generated_with_ai, ai_model_used, status, source, auto_generated_at
+                )
+                VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::uuid, true, $14, 'draft', 'auto_generated', NOW())
+                RETURNING *
+                """,
+                user_id,
+                job_id,
+                title,
+                title,
+                project_title or title,
+                description,
+                budget,
+                timeline,
+                skills or [],
+                job_url,
+                job_platform,
+                client_name,
+                UUID(strategy_id) if strategy_id else None,
+                ai_model_used,
             )
-            VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, true, $12, 'draft', 'auto_generated', NOW())
-            RETURNING *
-            """,
-            user_id,
-            job_id,
-            title,
-            description,
-            budget,
-            timeline,
-            skills or [],
-            job_url,
-            job_platform,
-            client_name,
-            UUID(strategy_id) if strategy_id else None,
-            ai_model_used,
-        )
+        else:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO proposals (
+                    user_id, project_id, title, description, budget, timeline, skills,
+                    job_url, job_platform, client_name, strategy_id,
+                    generated_with_ai, ai_model_used, status, source, auto_generated_at
+                )
+                VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, true, $12, 'draft', 'auto_generated', NOW())
+                RETURNING *
+                """,
+                user_id,
+                job_id,
+                title,
+                description,
+                budget,
+                timeline,
+                skills or [],
+                job_url,
+                job_platform,
+                client_name,
+                UUID(strategy_id) if strategy_id else None,
+                ai_model_used,
+            )
     return _row_to_proposal(dict(row))
 
 
@@ -270,10 +373,21 @@ async def update_proposal(
     params = []
     param_idx = 1
 
-    if proposal_data.title is not None:
+    proposal_columns = await _get_proposals_columns(db)
+    has_proposal_title_col = "proposal_title" in proposal_columns
+
+    proposal_title_update = proposal_data.proposal_title
+    if proposal_title_update is None and proposal_data.title is not None:
+        proposal_title_update = proposal_data.title
+
+    if proposal_title_update is not None:
         update_fields.append(f"title = ${param_idx}")
-        params.append(proposal_data.title)
+        params.append(proposal_title_update)
         param_idx += 1
+        if has_proposal_title_col:
+            update_fields.append(f"proposal_title = ${param_idx}")
+            params.append(proposal_title_update)
+            param_idx += 1
 
     if proposal_data.description is not None:
         update_fields.append(f"description = ${param_idx}")
@@ -342,7 +456,7 @@ async def update_proposal(
         return await get_proposal(proposal_id, user_id)
 
     # Add updated_at
-    update_fields.append(f"updated_at = NOW()")
+    update_fields.append("updated_at = NOW()")
 
     # Add WHERE clause parameters
     params.extend([proposal_id, user_id])
@@ -435,7 +549,23 @@ async def submit_from_draft(
     proposal = await create_proposal(
         user_id=user_id,
         proposal_data=ProposalCreate(
-            title=draft_data.get("title", "Untitled Proposal"),
+            title=(
+                draft_data.get("proposal_title")
+                or draft_data.get("proposalTitle")
+                or draft_data.get("title")
+                or "Untitled Proposal"
+            ),
+            proposal_title=(
+                draft_data.get("proposal_title")
+                or draft_data.get("proposalTitle")
+                or draft_data.get("title")
+                or "Untitled Proposal"
+            ),
+            project_title=(
+                draft_data.get("project_title")
+                or draft_data.get("projectTitle")
+                or draft_data.get("jobTitle")
+            ),
             description=draft_data.get("description", ""),
             budget=draft_data.get("budget"),
             timeline=draft_data.get("timeline"),

@@ -298,23 +298,23 @@ async def list_projects(
                 keyword_filter=keywords
             )
 
-            # Include manually added projects from DB in HF mode so "Add manually"
-            # entries are discoverable via the same list/search UI.
+            # Merge DB-backed projects in HF fallback mode so platform searches
+            # (e.g. freelancer/manual) still work against canonical projects table.
             try:
-                manual_jobs, _ = await list_projects_svc(
+                db_jobs, _ = await list_projects_svc(
                     limit=fetch_limit,
                     offset=0,
                     search=filter_search,
-                    platform="manual",
+                    platform=platform,
                     category=category,
                     status_filter=status,
                     applied=applied,
                     user_id=str(current_user.id),
                     sort_by=sort_by or "date",
                 )
-                jobs.extend(manual_jobs)
+                jobs.extend(db_jobs)
             except Exception as e:
-                logger.debug(f"Could not merge manual DB projects in HF mode: {e}")
+                logger.debug(f"Could not merge DB projects in HF mode: {e}")
 
             # Deduplicate merged records by stable ID keys.
             deduped_jobs = []

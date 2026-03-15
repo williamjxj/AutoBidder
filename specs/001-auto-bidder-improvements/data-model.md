@@ -101,7 +101,7 @@
 | skills | text[] | |
 | budget_min | decimal? | |
 | budget_max | decimal? | |
-| platform | varchar | hf_dataset, upwork, etc. |
+| platform | varchar | huggingface_dataset, upwork, etc. |
 | source_url | varchar? | |
 | status | varchar | new, reviewed, applied |
 | discovered_at | timestamptz | |

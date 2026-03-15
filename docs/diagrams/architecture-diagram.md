@@ -1,86 +1,97 @@
 # System Architecture Diagram
 
-This Mermaid diagram shows the high-level architecture of the Auto Bidder platform.
+This Mermaid diagram shows the current high-level architecture of the Auto Bidder platform, including the dual Projects data paths (database persistence vs direct HuggingFace fallback).
 
 ## Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph "Frontend - Next.js"
-        UI[User Interface]
-        Auth[Auth Pages]
-        Dashboard[Dashboard]
-        Proposals[Proposal Builder]
+    subgraph "Frontend (Next.js)"
+        FE_DASH[Dashboard]
+        FE_PROJECTS[Projects]
+        FE_PROPOSALS[Proposals]
+        FE_KB[Knowledge Base]
+        FE_SETTINGS[Settings]
     end
-    
-    subgraph "Backend - FastAPI"
-        API[FastAPI Server]
-        AuthSvc[Auth Service]
-        KeywordSvc[Keyword Service]
-        DocSvc[Document Service]
-        DraftSvc[Draft Service]
-        StrategySvc[Strategy Service]
-        VectorStore[Vector Store Service]
+
+    subgraph "Backend API (FastAPI Routers)"
+        RT_AUTH["/auth"]
+        RT_PROJECTS["/projects"]
+        RT_PROPOSALS["/proposals + /draft"]
+        RT_KB["/documents"]
+        RT_ETL["/etl"]
+        RT_KEYWORDS["/keywords"]
+        RT_STRATEGIES["/strategies"]
+        RT_SETTINGS["/settings"]
+        RT_ANALYTICS["/analytics"]
     end
-    
-    subgraph "Data Layer"
-        PostgreSQL[(PostgreSQL)]
-        ChromaDB[(ChromaDB Vector Store)]
+
+    subgraph "Core Services"
+        SVC_PROJECT[project_service]
+        SVC_DRAFT[draft_service]
+        SVC_DOC[document_service]
+        SVC_KEYWORD[keyword_service]
     end
-    
-    subgraph "External Services"
-        OpenAI[OpenAI GPT-4]
-        DeepSeek[DeepSeek API]
-        WebScraper[Web Scraper - Playwright]
+
+    subgraph "ETL"
+        ETL_SCHED[APScheduler]
+        ETL_HF[hf_loader]
+        ETL_FL[freelancer_loader]
+        ETL_FILTER[domain_filter]
     end
-    
-    UI --> API
-    Auth --> AuthSvc
-    Dashboard --> KeywordSvc
-    Dashboard --> StrategySvc
-    Proposals --> DraftSvc
-    
-    AuthSvc --> PostgreSQL
-    KeywordSvc --> PostgreSQL
-    KeywordSvc --> WebScraper
-    DocSvc --> PostgreSQL
-    DocSvc --> VectorStore
-    DraftSvc --> VectorStore
-    DraftSvc --> OpenAI
-    DraftSvc --> DeepSeek
-    StrategySvc --> PostgreSQL
-    
-    VectorStore --> ChromaDB
-    
-    style UI fill:#61dafb,stroke:#333,stroke-width:2px
-    style API fill:#009688,stroke:#333,stroke-width:2px
-    style PostgreSQL fill:#336791,stroke:#333,stroke-width:2px
-    style ChromaDB fill:#ff6b6b,stroke:#333,stroke-width:2px
-    style OpenAI fill:#10a37f,stroke:#333,stroke-width:2px
+
+    subgraph "Data Stores"
+        DB[(PostgreSQL)]
+        VDB[(ChromaDB)]
+    end
+
+    subgraph "External Providers"
+        HF[HuggingFace datasets]
+        FL[Freelancer scraping source]
+        LLM[OpenAI / DeepSeek]
+    end
+
+    FE_DASH --> RT_ANALYTICS
+    FE_DASH --> RT_PROJECTS
+    FE_PROJECTS --> RT_PROJECTS
+    FE_PROPOSALS --> RT_PROPOSALS
+    FE_KB --> RT_KB
+    FE_SETTINGS --> RT_SETTINGS
+
+    RT_PROJECTS --> SVC_PROJECT
+    RT_PROPOSALS --> SVC_DRAFT
+    RT_KB --> SVC_DOC
+    RT_KEYWORDS --> SVC_KEYWORD
+
+    SVC_PROJECT --> DB
+    SVC_DRAFT --> DB
+    SVC_DOC --> DB
+    SVC_DOC --> VDB
+    SVC_DRAFT --> VDB
+    SVC_DRAFT --> LLM
+
+    ETL_SCHED --> ETL_HF
+    ETL_SCHED --> ETL_FL
+    ETL_HF --> HF
+    ETL_FL --> FL
+    ETL_HF --> ETL_FILTER
+    ETL_FL --> ETL_FILTER
+    ETL_FILTER --> SVC_PROJECT
+
+    RT_PROJECTS -. fallback when persistence off .-> HF
+
+    style DB fill:#336791,stroke:#333,stroke-width:2px
+    style VDB fill:#ff6b6b,stroke:#333,stroke-width:2px
+    style RT_PROJECTS fill:#00a896,stroke:#333,stroke-width:2px
+    style ETL_SCHED fill:#f4a261,stroke:#333,stroke-width:2px
+    style FE_PROJECTS fill:#61dafb,stroke:#333,stroke-width:2px
 ```
 
 ## Component Descriptions
 
-### Frontend Layer
-- **User Interface**: React-based UI built with Next.js 15 and shadcn/ui
-- **Auth Pages**: Login/Signup with JWT authentication
-- **Dashboard**: Project management, keyword tracking, strategy configuration
-- **Proposal Builder**: Interactive proposal generation interface
+### Notes
 
-### Backend Layer
-- **FastAPI Server**: Main API gateway with async request handling
-- **Auth Service**: JWT token management and user authentication
-- **Keyword Service**: Keyword extraction and competitive analysis
-- **Document Service**: Knowledge base document management
-- **Draft Service**: AI-powered proposal generation
-- **Strategy Service**: Bidding strategy configuration
-- **Vector Store Service**: RAG-based semantic search
-
-### Data Layer
-- **PostgreSQL**: Primary relational database for structured data
-- **ChromaDB**: Vector database for embeddings and semantic search
-
-### External Services
-- **OpenAI GPT-4**: Primary LLM for proposal generation
-- **DeepSeek API**: Alternative LLM provider
-- **Web Scraper**: Playwright-based scraper for competitive intelligence
+- `ETL_USE_PERSISTENCE=true`: Projects list/discover read and write through PostgreSQL via project service.
+- `ETL_USE_PERSISTENCE=false`: Projects fallback can fetch directly from HuggingFace service for list/discover.
+- Knowledge Base and proposal generation use PostgreSQL + ChromaDB together (metadata + vector retrieval).
+- ETL scheduler can run both HF and Freelancer ingestion pipelines.

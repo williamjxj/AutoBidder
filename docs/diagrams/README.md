@@ -6,9 +6,9 @@ This directory contains technical diagrams and workflow documentation for the Au
 
 ### [architecture-diagram.md](./architecture-diagram.md)
 **System Architecture Overview**
-- Visual representation of the full-stack architecture
-- Shows frontend (Next.js), backend (FastAPI), databases (PostgreSQL, ChromaDB)
-- External service integrations (OpenAI, web scraping)
+- Current full-stack architecture (Next.js + FastAPI + PostgreSQL + ChromaDB)
+- Includes ETL scheduler and ingestion paths (HuggingFace + Freelancer)
+- Shows Projects dual-path behavior (DB persistence vs HF fallback)
 - Component relationships and data flow
 
 ### [auth-flow-diagram.md](./auth-flow-diagram.md)
@@ -19,11 +19,11 @@ This directory contains technical diagrams and workflow documentation for the Au
 - Password hashing and validation
 
 ### [workflow-diagram.md](./workflow-diagram.md)
-**Proposal Generation Workflow**
-- End-to-end proposal generation process (6 stages)
-- Input collection → Context gathering → RAG processing → AI generation → Post-processing → Finalization
-- Technologies used at each stage
-- Key metrics and quality checks
+**Projects and Proposal Workflow**
+- End-to-end path: project list/discover -> generate proposal -> save/submit
+- Distinguishes persistence-on and persistence-off behavior
+- Shows where DB writes happen vs read-only actions
+- Reflects current implemented router/service flow
 
 ### [quickstart-flow-diagram.md](./quickstart-flow-diagram.md)
 **Quick Start Setup Flow**
@@ -106,7 +106,9 @@ Links to related docs or implementation files.
 
 These diagrams are referenced from:
 - [Main README.md](../../README.md) - Architecture, workflow, auth flow sections
-- [architecture-diagram.md](./architecture-diagram.md) - System design
+- [../projects.md](../projects.md) - Projects behavior and ETL data flow
+- [../proposals.md](../proposals.md) - Proposal generation implementation
+- [../dashboard.md](../dashboard.md) - Dashboard feature and navigation context
 - [setup-and-run.md](../setup-and-run.md) - Setup instructions
 
 ## 🛠️ Maintenance

@@ -93,7 +93,7 @@ export default function ProposalDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <PageHeader
-          title={proposal.title}
+          title={proposal.proposal_title || proposal.title}
           description={`Status: ${proposal.status}`}
         />
       </div>
@@ -167,6 +167,14 @@ export default function ProposalDetailPage() {
               Proposal Metadata
             </CardHeader>
             <CardContent className="pt-4 space-y-3 text-xs">
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Proposal Title</p>
+                <p className="font-medium text-foreground break-words">{proposal.proposal_title || proposal.title || 'N/A'}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Project Title</p>
+                <p className="font-medium text-foreground break-words">{proposal.project_title || proposal.job_title || 'N/A'}</p>
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Platform</span>
                 <span className="font-medium capitalize">{proposal.job_platform || 'N/A'}</span>
@@ -198,7 +206,7 @@ export default function ProposalDetailPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground text-sm">
-                Are you sure you want to delete <strong>"{proposal.title}"</strong>? This action will permanently remove it from your records.
+                Are you sure you want to delete <strong>"{proposal.proposal_title || proposal.title}"</strong>? This action will permanently remove it from your records.
               </p>
             </CardContent>
             <div className="flex gap-3 p-6 pt-2 justify-end">

@@ -234,7 +234,7 @@ Response:
       "description": "...",
       "skills": ["Python", "FastAPI", "PostgreSQL"],
       "budget": "5000-8000",
-      "platform": "hf_dataset",
+      "platform": "huggingface_dataset",
       "status": "new"
     }
   ],
@@ -251,7 +251,7 @@ Response:
 {
   "total_jobs": 1523,
   "by_platform": {
-    "hf_dataset": 1523
+    "huggingface_dataset": 1523
   },
   "by_skill": {
     "Python": 456,
@@ -480,7 +480,7 @@ def normalize_hf_job(job_data: dict, dataset_id: str) -> dict:
     if dataset_id == "jacob-hugging-face/job-descriptions":
         return {
             "external_id": hashlib.md5(...).hexdigest(),
-            "platform": "hf_dataset",
+            "platform": "huggingface_dataset",
             "title": record.get("position_title") or record.get("job_title", "Unknown Title"),
             "company": record.get("company_name", "Unknown Company"),
             "description": record.get("job_description", ""),
@@ -499,7 +499,7 @@ def normalize_hf_job(job_data: dict, dataset_id: str) -> dict:
     elif dataset_id == "lukebarousse/data_jobs":
         return {
             "external_id": str(record.get("job_id", "")),
-            "platform": "hf_dataset",
+            "platform": "huggingface_dataset",
             "title": record.get("job_title_short") or record.get("job_title", "Unknown Title"),
             "company": record.get("company_name", ""),
             "description": record.get("job_description", ""),

@@ -4,6 +4,8 @@
 **Version**: 3.0 (Compact & Animated)  
 **Status**: ✅ Production Ready
 
+**Related:** [projects.md](./projects.md) | [proposals.md](./proposals.md) | [diagrams/workflow-diagram.md](./diagrams/workflow-diagram.md)
+
 ---
 
 ## Overview

@@ -15,6 +15,17 @@ class ProposalBase(BaseModel):
     """Base proposal model with common fields."""
 
     title: str = Field(..., min_length=1, max_length=500, description="Proposal title")
+    proposal_title: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=500,
+        description="Editable proposal title (defaults to title when omitted)",
+    )
+    project_title: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Original project title (read-only source title)",
+    )
     description: str = Field(..., min_length=1, description="Proposal description/content")
     budget: Optional[str] = Field(None, description="Proposed budget (string to allow ranges/context)")
     timeline: Optional[str] = Field(None, max_length=200, description="Timeline estimate")
@@ -43,6 +54,7 @@ class ProposalUpdate(BaseModel):
     """Model for updating a proposal (partial updates allowed)."""
 
     title: Optional[str] = Field(None, min_length=1, max_length=500)
+    proposal_title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = Field(None, min_length=1)
     budget: Optional[str] = None
     timeline: Optional[str] = Field(None, max_length=200)
@@ -66,7 +78,6 @@ class Proposal(ProposalBase):
     id: str = Field(..., description="UUID primary key")
     user_id: str = Field(..., description="User UUID")
     job_id: Optional[str] = Field(None, description="Linked job UUID when created from Projects page")
-    project_title: Optional[str] = Field(None, description="Linked project title when available")
 
     # Status fields
     status: str = Field(..., description="Proposal status")
@@ -104,6 +115,7 @@ class ProposalSubmitRequest(BaseModel):
 
     # Optional overrides
     title: Optional[str] = None
+    proposal_title: Optional[str] = None
     description: Optional[str] = None
     budget: Optional[str] = None
     timeline: Optional[str] = None

@@ -1,6 +1,8 @@
 -- Migration 016: Remove scoring artifacts
 -- Created: 2026-03-13
--- Description: Drops deprecated score-related columns, tables, and indexes.
+-- Description: Consolidated cleanup migration (scoring removal + HF token normalization + proposal title split).
+
+BEGIN;
 
 -- ============================================================
 -- PROPOSALS: remove proposal quality fields
@@ -42,3 +44,34 @@ DROP INDEX IF EXISTS idx_user_project_qualifications_user_id;
 DROP INDEX IF EXISTS idx_user_project_qualifications_project_id;
 DROP INDEX IF EXISTS idx_user_job_qualifications_user_id;
 DROP INDEX IF EXISTS idx_user_job_qualifications_job_id;
+
+-- ============================================================
+-- PROPOSALS: normalize legacy HuggingFace platform tokens
+-- ============================================================
+UPDATE proposals
+SET job_platform = 'huggingface_dataset'
+WHERE job_platform IS NOT NULL
+  AND LOWER(TRIM(job_platform)) IN ('hf_dataset', 'huggingface', 'hugging face');
+
+-- ============================================================
+-- PROPOSALS: separate immutable project title and editable proposal title
+-- ============================================================
+ALTER TABLE proposals
+  ADD COLUMN IF NOT EXISTS project_title VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS proposal_title VARCHAR(500);
+
+UPDATE proposals
+SET proposal_title = COALESCE(NULLIF(TRIM(proposal_title), ''), title)
+WHERE proposal_title IS NULL OR TRIM(proposal_title) = '';
+
+UPDATE proposals p
+SET project_title = pr.title
+FROM projects pr
+WHERE p.project_id = pr.id
+  AND (p.project_title IS NULL OR TRIM(p.project_title) = '');
+
+UPDATE proposals
+SET project_title = COALESCE(NULLIF(TRIM(project_title), ''), proposal_title)
+WHERE project_title IS NULL OR TRIM(project_title) = '';
+
+COMMIT;

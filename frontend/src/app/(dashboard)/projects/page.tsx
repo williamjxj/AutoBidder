@@ -42,7 +42,6 @@ interface PageProjectFilters {
   platforms: string[]
   minBudget?: number
   maxBudget?: number
-  category?: string
   startDate?: string
   endDate?: string
   applied?: boolean
@@ -56,7 +55,6 @@ function toApiFilters(f: PageProjectFilters): ProjectFilters {
     platforms: f.platforms.length ? f.platforms : undefined,
     min_budget: f.minBudget,
     max_budget: f.maxBudget,
-    category: f.category || undefined,
     start_date: f.startDate || undefined,
     end_date: f.endDate || undefined,
     applied: f.applied,
@@ -157,17 +155,25 @@ const ProjectsHeader = memo(function ProjectsHeader({
             className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
           >
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Category</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Source Platform</label>
               <select
                 className="w-full text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5"
-                value={filters.category || ''}
-                onChange={(e) => onFiltersChange({ ...filters, category: e.target.value })}
+                value={filters.platforms[0] || ''}
+                onChange={(e) =>
+                  onFiltersChange({
+                    ...filters,
+                    platforms: e.target.value ? [e.target.value] : [],
+                  })
+                }
               >
-                <option value="">All Categories</option>
-                <option value="development">Development</option>
-                <option value="design">Design</option>
-                <option value="writing">Writing</option>
-                <option value="marketing">Marketing</option>
+                <option value="">All Sources</option>
+                <option value="huggingface_dataset">HuggingFace</option>
+                <option value="freelancer">Freelancer</option>
+                <option value="upwork">Upwork</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="remoteok">RemoteOK</option>
+                <option value="remotive">Remotive</option>
+                <option value="manual">Manual</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -930,22 +936,18 @@ export default function ProjectsPage() {
   const [filters, setFiltersState] = useState<PageProjectFilters>({
     search: savedFilters.search || '',
     skills: savedFilters.skills || [],
-    // Platform filter UI is currently hidden; keep this empty to avoid stale session filters.
-    platforms: [],
+    platforms: savedFilters.platforms || [],
     minBudget: savedFilters.minBudget,
     maxBudget: savedFilters.maxBudget,
-    category: savedFilters.category || '',
     applied: savedFilters.applied || false,
     sortBy: savedFilters.sortBy || 'date',
   })
   const [appliedFilters, setAppliedFilters] = useState<PageProjectFilters>(() => ({
     search: savedFilters.search || '',
     skills: savedFilters.skills || [],
-    // Platform filter UI is currently hidden; keep this empty to avoid stale session filters.
-    platforms: [],
+    platforms: savedFilters.platforms || [],
     minBudget: savedFilters.minBudget,
     maxBudget: savedFilters.maxBudget,
-    category: savedFilters.category || '',
     applied: savedFilters.applied || false,
     sortBy: savedFilters.sortBy || 'date',
   }))

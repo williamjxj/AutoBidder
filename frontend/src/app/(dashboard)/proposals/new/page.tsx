@@ -37,7 +37,8 @@ import {
 import { useToast } from '@/lib/toast/toast-context'
 
 interface ProposalFormData {
-  title: string
+  projectTitle: string
+  proposalTitle: string
   description: string
   budget: string
   timeline: string
@@ -64,7 +65,8 @@ function NewProposalPageContent() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<ProposalFormData>({
-    title: '',
+    projectTitle: '',
+    proposalTitle: '',
     description: '',
     budget: '',
     timeline: '',
@@ -144,7 +146,8 @@ function NewProposalPageContent() {
 
       setFormData((prev) => ({
         ...prev,
-        title: `Proposal for: ${p.title}`,
+        projectTitle: p.title,
+        proposalTitle: prev.proposalTitle || `Proposal for: ${p.title}`,
         budget: budgetStr || prev.budget,
         skills: skillsStr || prev.skills,
         description: prev.description || `I am interested in your project "${p.title}". `,
@@ -213,7 +216,8 @@ function NewProposalPageContent() {
         const p = await getProposal(editId)
         if (p) {
           setFormData({
-            title: p.title || '',
+            projectTitle: p.project_title || p.job_title || '',
+            proposalTitle: p.proposal_title || p.title || '',
             description: p.description || '',
             budget: p.budget || '',
             timeline: p.timeline || '',
@@ -259,7 +263,8 @@ function NewProposalPageContent() {
       const draftData = recoveredDraft.draftData
       if (draftData) {
         setFormData({
-          title: draftData.title || '',
+          projectTitle: draftData.projectTitle || draftData.project_title || draftData.jobTitle || '',
+          proposalTitle: draftData.proposalTitle || draftData.proposal_title || draftData.title || '',
           description: draftData.description || '',
           budget: draftData.budget || '',
           timeline: draftData.timeline || '',
@@ -284,7 +289,8 @@ function NewProposalPageContent() {
     onDiscard: () => {
       // Start with fresh form
       setFormData({
-        title: '',
+        projectTitle: '',
+        proposalTitle: '',
         description: '',
         budget: '',
         timeline: '',
@@ -309,6 +315,7 @@ function NewProposalPageContent() {
     data: useMemo(
       () => ({
         ...formData,
+        title: formData.proposalTitle,
         jobId: jobContext?.id,
         jobTitle: jobContext?.title,
         jobCompany: jobContext?.company,
@@ -320,7 +327,8 @@ function NewProposalPageContent() {
         strategy_id: selectedStrategyId,
       }),
       [
-        formData.title,
+        formData.projectTitle,
+        formData.proposalTitle,
         formData.description,
         formData.budget,
         formData.timeline,
@@ -378,29 +386,6 @@ function NewProposalPageContent() {
     }))
   }
 
-  const withProjectTitleAnchor = (candidateTitle: string, currentTitle: string) => {
-    const trimmedCandidate = (candidateTitle || '').trim()
-    const fallbackTitle = (currentTitle || '').trim()
-    const baseTitle = trimmedCandidate || fallbackTitle
-
-    if (!baseTitle) {
-      return currentTitle
-    }
-
-    if (!jobContext?.title) {
-      return baseTitle
-    }
-
-    const normalizedBase = baseTitle.toLowerCase()
-    const normalizedProject = jobContext.title.toLowerCase()
-
-    if (normalizedBase.includes(normalizedProject)) {
-      return baseTitle
-    }
-
-    return `${jobContext.title} | ${baseTitle}`
-  }
-
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
@@ -415,7 +400,9 @@ function NewProposalPageContent() {
         : []
 
       const proposalData = {
-        title: formData.title.trim(),
+        title: formData.proposalTitle.trim(),
+        proposal_title: formData.proposalTitle.trim(),
+        project_title: (formData.projectTitle || jobContext?.title || formData.proposalTitle).trim(),
         description: formData.description.trim(),
         budget: formData.budget?.trim() || undefined,
         timeline: formData.timeline?.trim() || undefined,
@@ -505,7 +492,7 @@ function NewProposalPageContent() {
             if (event.type === 'done' && event.result) {
               setFormData((prev) => ({
                 ...prev,
-                title: withProjectTitleAnchor(event.result?.title || '', prev.title),
+                proposalTitle: (event.result?.title || prev.proposalTitle),
                 description: event.result?.description || prev.description,
                 budget: event.result?.budget || prev.budget,
                 timeline: event.result?.timeline || prev.timeline,
@@ -528,7 +515,7 @@ function NewProposalPageContent() {
         if (generated) {
           setFormData((prev) => ({
             ...prev,
-            title: withProjectTitleAnchor(generated.title || '', prev.title),
+            proposalTitle: generated.title || prev.proposalTitle,
             description: generated.description,
             budget: generated.budget || prev.budget,
             timeline: generated.timeline || prev.timeline,
@@ -825,14 +812,27 @@ function NewProposalPageContent() {
 
       {/* Proposal Form */}
       <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
-        {/* Title */}
+        {/* Original Project Title (read-only) */}
         <div>
-          <Label htmlFor="title">Proposal Title *</Label>
+          <Label htmlFor="projectTitle">Project Title</Label>
           <Input
             type="text"
-            id="title"
-            value={formData.title}
-            onChange={(e) => handleChange('title', e.target.value)}
+            id="projectTitle"
+            value={formData.projectTitle || jobContext?.title || ''}
+            readOnly
+            placeholder="Project title from linked job"
+            className="mt-2 bg-muted/40"
+          />
+        </div>
+
+        {/* Proposal Title (editable) */}
+        <div>
+          <Label htmlFor="proposalTitle">Proposal Title *</Label>
+          <Input
+            type="text"
+            id="proposalTitle"
+            value={formData.proposalTitle}
+            onChange={(e) => handleChange('proposalTitle', e.target.value)}
             required
             placeholder="Enter a compelling title for your proposal"
             className="mt-2"

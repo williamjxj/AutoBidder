@@ -4,6 +4,8 @@
 
 **Last Updated:** March 13, 2026
 
+**Related:** [projects.md](./projects.md) | [diagrams/workflow-diagram.md](./diagrams/workflow-diagram.md)
+
 ---
 
 ## Workflow

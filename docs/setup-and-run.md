@@ -22,9 +22,14 @@ docker-compose up -d
 
 Apply migrations:
 ```bash
+# Do NOT run: python database/migrations/*.sql
+# SQL files should be executed by psql or the migration runner script.
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";"
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/001_initial_schema.sql
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/016_remove_scoring_artifacts.sql
+
+# Or run all migrations in order (requires DATABASE_URL):
+python backend/scripts/run_migrations.py
 ```
 
 ---

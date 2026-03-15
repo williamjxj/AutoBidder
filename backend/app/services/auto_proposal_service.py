@@ -80,6 +80,7 @@ async def auto_generate_proposals(
                 skills=result.skills,
                 strategy_id=strategy_id,
                 ai_model_used=result.ai_model,
+                project_title=job.get("title"),
                 job_url=None,
                 job_platform=job.get("platform"),
                 client_name=job.get("company"),
