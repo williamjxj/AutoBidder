@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright, Page
 
 # Configuration
-BASE_URL = "http://localhost:3000"
+BASE_URL = "http://localhost:5556"
 EMAIL = "jxjwilliam@2925.com"
 PASSWORD = "William1!"
 SCREENSHOTS_DIR = Path(__file__).parent.parent / "assets" / "images"

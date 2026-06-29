@@ -27,7 +27,7 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # Run development server
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 5555
 
 # Run tests
 pytest
@@ -44,8 +44,8 @@ See `.env.example` for required configuration.
 ## API Documentation
 
 Once running, visit:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:5555/docs
+- ReDoc: http://localhost:5555/redoc
 
 ## Project Structure
 

@@ -539,7 +539,7 @@ docker-compose logs backend | grep analytics
 
 # Verify API endpoint
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/analytics/proposals-stats?time_range=7d
+  http://localhost:5555/api/analytics/proposals-stats?time_range=7d
 ```
 
 ### Issue: Export button disabled

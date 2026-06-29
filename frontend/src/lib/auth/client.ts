@@ -4,7 +4,7 @@
  * Handles API calls to backend authentication endpoints
  */
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5555'
 
 export interface User {
   id: string

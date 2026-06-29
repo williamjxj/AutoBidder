@@ -1,6 +1,17 @@
-# Auto-Bidder Platform 🤖
+# Auto-Bidder Platform (Autonomous AI bidding & procurement system) 🤖 
 
 An AI-powered auto-bidding platform that reduces proposal writing time from 30 minutes to 2 minutes using RAG-based knowledge retrieval and AI proposal generation.
+
+An autonomous multi-agent system that monitors procurement opportunities, evaluates bid fit, generates proposal content, and manages submission workflows. Reduces the manual overhead of competitive bidding for enterprise buyers and suppliers.
+
+**Services: **
+Bid monitoring, Fit scoring, Proposal generation, Submission automation, Spend analytics
+
+**Highlights:**
+- Multi-agent system: Coordinated autonomous agents
+- Real-time decisions: Bid/no-bid in seconds
+- Proposal drafting: LLM-generated content
+- ISC-aligned: Gov procurement potential
 
 ## 📸 Screenshots & Preview
 
@@ -70,23 +81,36 @@ An AI-powered auto-bidding platform that reduces proposal writing time from 30 m
 
 ## 🚀 Quick Start
 
-**Prerequisites:** Node.js 20+ • Python 3.11+ • Docker
+**Prerequisites:** Node.js 20+ • Python 3.11+ • Docker • `make`
 
 ```bash
-# Start services
+# One-time setup
+cp backend/.env.example backend/.env          # Configure env vars
+cp frontend/.env.example frontend/.env.local
+
+# Start everything
+make infra-up                                 # Start PostgreSQL + ChromaDB
+make install                                  # Install all dependencies
+make dev                                      # Run backend (:5555) + frontend (:5556)
+```
+
+**Or set up manually:**
+```bash
 docker-compose up -d
 
 # Frontend
 cd frontend && npm install && cp .env.example .env.local
-npm run dev  # http://localhost:3000
+npm run dev  # http://localhost:5556
 
 # Backend
 cd backend && pip install -r requirements.txt && cp .env.example .env
 # Edit .env: Add JWT_SECRET, OPENAI_API_KEY/DEEPSEEK_API_KEY, RESEND_API_KEY
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 5555
 ```
 
 **Required ENV vars:** `JWT_SECRET` • `OPENAI_API_KEY` or `DEEPSEEK_API_KEY` • `RESEND_API_KEY` • `DATABASE_URL`
+
+> 💡 **Makefile:** Run `make help` for all available commands, or see [docs/makefile-commands.md](docs/makefile-commands.md).
 
 📄 [Complete setup guide](./docs/setup-and-run.md) | [Auth setup](./docs/setup-auth.md) | [Email config](./docs/email-system.md)
 

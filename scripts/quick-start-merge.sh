@@ -296,7 +296,7 @@ UPWORK_API_KEY=
 FREELANCER_API_KEY=
 
 # Next.js URL (for CORS)
-NEXTJS_URL=http://localhost:3000
+NEXTJS_URL=http://localhost:5556
 EOF
 
 cat > "$BIDDING_ROOT/python-ai-service/app/__init__.py" << 'EOF'
@@ -319,12 +319,12 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 5555
 ```
 
 ## API Docs
 
-Visit: http://localhost:8000/docs
+Visit: http://localhost:5555/docs
 EOF
 
 echo "✅ Python service structure created"

@@ -35,7 +35,7 @@ services:
   #     dockerfile: Dockerfile
   #   container_name: auto-bidder-backend
   #   ports:
-  #     - "8000:8000"
+  #     - "5555:8000"
   #   environment:
   #     - OPENAI_API_KEY=${OPENAI_API_KEY}
   #     - CHROMA_PERSIST_DIR=/app/chroma_db
@@ -52,7 +52,7 @@ services:
   #     - chromadb
   #   networks:
   #     - auto-bidder-network
-  #   command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  #   command: uvicorn app.main:app --host 0.0.0.0 --port 5555 --reload
 
   # Next.js Frontend (optional - usually run with npm run dev)
   # frontend:
@@ -61,9 +61,9 @@ services:
   #     dockerfile: Dockerfile
   #   container_name: auto-bidder-frontend
   #   ports:
-  #     - "3000:3000"
+  #     - "5556:3000"
   #   environment:
-  #     - PYTHON_AI_SERVICE_URL=http://backend:8000
+  #     - PYTHON_AI_SERVICE_URL=http://backend:5555
   #   depends_on:
   #     - backend
   #   networks:

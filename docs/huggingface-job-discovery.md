@@ -72,8 +72,8 @@
    - ✅ Validated data loading, search, and normalization
 
 7. **Deployment**
-   - ✅ Backend: http://localhost:8000
-   - ✅ Frontend: http://localhost:3000
+   - ✅ Backend: http://localhost:5555
+   - ✅ Frontend: http://localhost:5556
    - ✅ Both servers tested and operational
 
 **Performance Metrics:**
@@ -324,7 +324,7 @@ HF_JOB_LIMIT=200
    # Terminal 1: Start backend
    cd backend
    source venv/bin/activate
-   uvicorn app.main:app --reload --port 8000
+   uvicorn app.main:app --reload --port 5555
    
    # Terminal 2: Start frontend
    cd frontend
@@ -332,7 +332,7 @@ HF_JOB_LIMIT=200
    ```
 
 2. **Access Dashboard**
-   - Navigate to http://localhost:3000
+   - Navigate to http://localhost:5556
    - Login with credentials
    - Go to **Projects** page
 
@@ -426,7 +426,7 @@ EOF
 
 **Test API Endpoint:**
 ```bash
-curl -X POST "http://localhost:8000/api/projects/discover" \
+curl -X POST "http://localhost:5555/api/projects/discover" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
@@ -600,7 +600,7 @@ pip install -r requirements.txt
 **Error:** `Failed to fetch`
 
 **Solutions:**
-- Ensure backend is running: http://localhost:8000
+- Ensure backend is running: http://localhost:5555
 - Check `NEXT_PUBLIC_BACKEND_API_URL` in frontend `.env`
 - Verify CORS settings in backend
 - Check network tab in browser DevTools

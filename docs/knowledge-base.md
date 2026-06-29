@@ -652,10 +652,10 @@ CHUNK_OVERLAP=200
 ```bash
 # Terminal 1: Start backend
 cd backend
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 5555
 
 # Terminal 2: Upload test document
-curl -X POST http://localhost:8000/api/documents/upload \
+curl -X POST http://localhost:5555/api/documents/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@test.pdf" \
   -F "collection=case_studies" \
@@ -663,7 +663,7 @@ curl -X POST http://localhost:8000/api/documents/upload \
   -F "supplemental_info=Test context for RAG"
 
 # Terminal 3: Query documents
-curl http://localhost:8000/api/documents \
+curl http://localhost:5555/api/documents \
   -H "Authorization: Bearer $TOKEN"
 ```
 

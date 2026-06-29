@@ -10,20 +10,27 @@
 - Python 3.11+ (3.12+ recommended)
 - Docker & Docker Compose
 - DeepSeek or OpenAI API key (for LLM)
+- `make` (available on macOS via Xcode CLI tools)
+
+> 💡 **Tip:** This project has a `Makefile` at the root with shortcuts for all common commands.
+> Run `make help` to see them, or refer to [docs/makefile-commands.md](makefile-commands.md) for the full reference.
 
 ---
 
 ## Step 1: Infrastructure
 
+**Recommended — using Makefile:**
+```bash
+cd auto-bidder
+make infra-up         # Start PostgreSQL + ChromaDB
+make db-migrate       # Apply all pending migrations
+```
+
+**Or manually:**
 ```bash
 cd auto-bidder
 docker-compose up -d
-```
-
-Apply migrations:
-```bash
-# Do NOT run: python database/migrations/*.sql
-# SQL files should be executed by psql or the migration runner script.
+# Apply migrations via psql
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";"
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/001_initial_schema.sql
 docker exec -i auto-bidder-postgres psql -U postgres -d auto_bidder_dev < database/migrations/016_remove_scoring_artifacts.sql
@@ -38,8 +45,8 @@ python backend/scripts/run_migrations.py
 
 **Frontend** (`frontend/.env.local`):
 ```bash
-NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
-PYTHON_AI_SERVICE_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_API_URL=http://localhost:5555
+PYTHON_AI_SERVICE_URL=http://localhost:5555
 ```
 
 **Backend** (`backend/.env`):
@@ -57,17 +64,34 @@ CHROMA_PERSIST_DIR=./chroma_db
 
 ## Step 3: Start Application
 
-**Terminal 1 — Backend:**
+**Recommended — using Makefile (single command):**
 ```bash
+cd auto-bidder
+make install    # Install all dependencies (one-time)
+make dev        # Start both servers concurrently
+```
+
+**Or run servers individually:**
+```bash
+# Terminal 1 — Backend:
+cd auto-bidder
+make backend-dev
+
+# Terminal 2 — Frontend:
+cd auto-bidder
+make frontend-dev
+```
+
+**Or manually:**
+```bash
+# Terminal 1 — Backend:
 cd backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
+uvicorn app.main:app --reload --port 5555
 
-**Terminal 2 — Frontend:**
-```bash
+# Terminal 2 — Frontend:
 cd frontend
 npm install
 npm run dev
@@ -77,9 +101,9 @@ npm run dev
 
 ## Step 4: Verify
 
-1. Backend: [http://localhost:8000/health](http://localhost:8000/health) → `{"status":"healthy"}`
-2. API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-3. Frontend: [http://localhost:3000](http://localhost:3000) → Sign up → Dashboard
+1. Backend: [http://localhost:5555/health](http://localhost:5555/health) → `{"status":"healthy"}`
+2. API docs: [http://localhost:5555/docs](http://localhost:5555/docs)
+3. Frontend: [http://localhost:5556](http://localhost:5556) → Sign up → Dashboard
 
 ---
 
@@ -96,7 +120,7 @@ See [proposals.md](proposals.md) for the full flow.
 ## Troubleshooting
 
 - **Backend import errors:** Activate venv, run `pip install -r requirements.txt`
-- **Port conflicts:** `lsof -ti:3000 | xargs kill -9` (or 8000)
+- **Port conflicts:** `lsof -ti:5556 | xargs kill -9` (or 5555)
 - **Database:** Ensure `docker ps` shows postgres and chromadb
 
 ---

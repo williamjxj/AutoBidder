@@ -6,4 +6,4 @@ pkill -f "uvicorn app.main:app"  # Stop current server
 
 source venv/bin/activate
 
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 5555

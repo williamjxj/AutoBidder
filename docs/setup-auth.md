@@ -36,14 +36,26 @@ pip install -r requirements.txt
 
 ## Step 3: Start Backend and Frontend
 
-**Backend:**
+**Using Makefile:**
 ```bash
-cd backend
-uvicorn app.main:app --reload --port 8000
+make infra-up       # Start infrastructure (if not already running)
+make install        # Install dependencies (one-time)
+make dev            # Start both servers
 ```
 
-**Frontend (new terminal):**
+**Or start individually:**
 ```bash
+make backend-dev    # Backend on :5555
+make frontend-dev   # Frontend on :5556
+```
+
+**Or manually:**
+```bash
+# Backend:
+cd backend
+uvicorn app.main:app --reload --port 5555
+
+# Frontend (new terminal):
 cd frontend
 npm install && npm run dev
 ```
@@ -52,22 +64,22 @@ npm install && npm run dev
 
 ## Step 4: Test Authentication
 
-**UI:** Go to `http://localhost:3000` → Sign Up → Create account → Dashboard
+**UI:** Go to `http://localhost:5556` → Sign Up → Create account → Dashboard
 
 **API (curl):**
 ```bash
 # Signup
-curl -X POST http://localhost:8000/api/auth/signup \
+curl -X POST http://localhost:5555/api/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}'
 
 # Login
-curl -X POST http://localhost:8000/api/auth/login \
+curl -X POST http://localhost:5555/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123"}'
 
 # Get user (use token from login)
-curl -X GET http://localhost:8000/api/auth/me \
+curl -X GET http://localhost:5555/api/auth/me \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -85,8 +97,8 @@ JWT_EXPIRATION_MINUTES=10080
 
 **Frontend `.env.local`:**
 ```bash
-NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
-PYTHON_AI_SERVICE_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_API_URL=http://localhost:5555
+PYTHON_AI_SERVICE_URL=http://localhost:5555
 ```
 
 **Generate JWT secret for production:**

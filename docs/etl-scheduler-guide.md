@@ -16,7 +16,7 @@ The scheduler starts automatically on backend startup. No extra setup.
 
 ### Manual trigger
 ```bash
-curl -X POST http://localhost:8000/api/etl/trigger \
+curl -X POST http://localhost:5555/api/etl/trigger \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source": "hf_loader"}'
@@ -29,7 +29,7 @@ Returns `202 Accepted`; ingestion runs in the background.
 ### View run history
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8000/api/etl/runs?limit=20"
+  "http://localhost:5555/api/etl/runs?limit=20"
 ```
 
 ---

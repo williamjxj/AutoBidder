@@ -18,10 +18,10 @@ graph TD
         ConfigEnv1 --> DockerUp[Run: docker-compose up -d]
         DockerUp --> WaitDB[Wait for PostgreSQL]
         WaitDB --> RunMigrations1[Run: docker-compose exec backend python -m scripts.run_migrations]
-        RunMigrations1 --> StartBackend1[Backend running on :8000]
+        RunMigrations1 --> StartBackend1[Backend running on :5555]
         StartBackend1 --> InstallFrontend1[Run: cd frontend && npm install]
         InstallFrontend1 --> StartFrontend1[Run: npm run dev]
-        StartFrontend1 --> Success1[✅ App running on :3000]
+        StartFrontend1 --> Success1[✅ App running on :5556]
     end
     
     subgraph "Manual Setup"
@@ -35,10 +35,10 @@ graph TD
         RunMigrations2 --> StartBackend2[uvicorn app.main:app --reload]
         StartBackend2 --> InstallFrontend2[cd frontend && npm install]
         InstallFrontend2 --> StartFrontend2[npm run dev]
-        StartFrontend2 --> Success2[✅ App running on :3000]
+        StartFrontend2 --> Success2[✅ App running on :5556]
     end
     
-    Success1 --> Verify[Open http://localhost:3000]
+    Success1 --> Verify[Open http://localhost:5556]
     Success2 --> Verify
     Verify --> TestSignup[Test: Create Account]
     TestSignup --> TestLogin[Test: Login]
@@ -71,7 +71,7 @@ OPENAI_API_KEY=sk-...
 DEEPSEEK_API_KEY=...
 
 # Frontend .env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:5555
 ```
 
 ## Generate JWT Secret
@@ -85,7 +85,7 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 | Issue | Solution |
 |-------|----------|
 | Port 5432 already in use | Stop existing PostgreSQL: `brew services stop postgresql` |
-| Port 8000 already in use | Kill process: `lsof -ti:8000 \| xargs kill -9` |
+| Port 5555 already in use | Kill process: `lsof -ti:5555 \| xargs kill -9` |
 | Python version mismatch | Use pyenv: `pyenv install 3.11 && pyenv local 3.11` |
 | npm install fails | Clear cache: `npm cache clean --force` |
 | Database connection fails | Check PostgreSQL is running: `docker ps` or `pg_isready` |
@@ -94,12 +94,12 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 
 1. **Backend Health Check**
    ```bash
-   curl http://localhost:8000/health
+   curl http://localhost:5555/health
    # Expected: {"status":"healthy"}
    ```
 
 2. **Frontend Loading**
-   - Navigate to http://localhost:3000
+   - Navigate to http://localhost:5556
    - Should see login page
 
 3. **Database Migrations**

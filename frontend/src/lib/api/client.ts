@@ -205,7 +205,7 @@ import type {
  * Returns a properly formatted absolute URL
  */
 function getBackendUrl(): string {
-  const url = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'
+  const url = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5555'
 
   // Normalize: remove trailing slashes and trim
   let cleanUrl = url.trim().replace(/\/+$/, '')

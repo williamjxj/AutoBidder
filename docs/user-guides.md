@@ -6,11 +6,19 @@
 
 ## Starting the App
 
-1. **Infrastructure:** `docker-compose up -d`
-2. **Backend:** `cd backend && source venv/bin/activate && uvicorn app.main:app --reload --port 8000`
-3. **Frontend:** `cd frontend && npm run dev`
+**Quick start (using Makefile):**
+```bash
+make infra-up      # Start PostgreSQL + ChromaDB
+make install       # Install dependencies (one-time)
+make dev           # Start both backend (:5555) and frontend (:5556)
+```
 
-See [setup-and-run.md](setup-and-run.md) for full setup.
+**Or start individually:**
+1. **Infrastructure:** `make infra-up`
+2. **Backend:** `make backend-dev`
+3. **Frontend:** `make frontend-dev`
+
+See [setup-and-run.md](setup-and-run.md) for full setup or [makefile-commands.md](makefile-commands.md) for all available commands.
 
 ---
 

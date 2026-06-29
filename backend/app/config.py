@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     # CORS Configuration
     cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001", alias="CORS_ORIGINS"
+        default="http://localhost:5556,http://localhost:5557", alias="CORS_ORIGINS"
     )
 
     # Rate Limiting

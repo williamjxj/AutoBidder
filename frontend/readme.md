@@ -19,11 +19,11 @@ Next.js 15 frontend for the Auto-Bidder AI proposal platform.
 ```bash
 npm install
 cp .env.example .env.local
-# Edit .env.local: NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
+# Edit .env.local: NEXT_PUBLIC_BACKEND_API_URL=http://localhost:5555
 npm run dev
 ```
 
-Runs on [http://localhost:3000](http://localhost:3000).
+Runs on [http://localhost:5556](http://localhost:5556).
 
 ---
 
