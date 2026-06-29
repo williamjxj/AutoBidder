@@ -33,7 +33,7 @@ infra-down: ## Stop Docker services
 # =============================================================================
 
 backend-dev: ## Start backend dev server (uvicorn with hot-reload, port 5555)
-	$(VENV)/bin/uvicorn app.main:app --reload --port 5555 --app-dir $(BACKEND)
+	cd $(BACKEND) && ../$(VENV)/bin/uvicorn app.main:app --reload --port 5555
 
 backend-test: ## Run all backend tests
 	cd $(BACKEND) && $(VENV)/bin/pytest
