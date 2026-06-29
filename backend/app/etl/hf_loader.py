@@ -9,8 +9,10 @@ NOTE (006): Keyword filtering for Projects list is NOT applied during ingestion 
 Filtering by user/system keywords happens only in project_service.list_projects at list time.
 """
 
+import asyncio
 import hashlib
 import logging
+from functools import partial
 from typing import List, Optional
 
 from app.etl.domain_filter import passes_domain_filter
@@ -102,6 +104,22 @@ def load_and_filter_hf_jobs(
     return records, total_extracted, total_filtered
 
 
+async def load_and_filter_hf_jobs_async(
+    dataset_id: str = "jacob-hugging-face/job-descriptions",
+    limit: int = 200,
+    keyword_filter: Optional[List[str]] = None,
+) -> tuple[List[JobRecord], int, int]:
+    """Async wrapper around load_and_filter_hf_jobs — runs in thread pool."""
+    return await asyncio.to_thread(
+        partial(
+            load_and_filter_hf_jobs,
+            dataset_id=dataset_id,
+            limit=limit,
+            keyword_filter=keyword_filter,
+        )
+    )
+
+
 async def run_hf_ingestion_multi(limit_per_dataset: int = 200) -> dict:
     """
     Run HF ingestion for all datasets in HF_DATASET_IDS.
@@ -161,7 +179,7 @@ async def run_hf_ingestion(
     status = "running"
 
     try:
-        records, jobs_extracted, jobs_filtered = load_and_filter_hf_jobs(
+        records, jobs_extracted, jobs_filtered = await load_and_filter_hf_jobs_async(
             dataset_id=dataset_id,
             limit=limit,
         )

@@ -55,11 +55,11 @@ async def run_autonomous_discovery_for_user(user_id: str) -> Dict[str, Any]:
         return {"jobs_discovered": 0, "proposals_generated": 0, "notifications_sent": 0}
 
     # Load and filter jobs from HuggingFace
-    from app.etl.hf_loader import load_and_filter_hf_jobs
+    from app.etl.hf_loader import load_and_filter_hf_jobs_async
 
     dataset_id = settings.hf_dataset_ids_list[0] if settings.hf_dataset_ids_list else "jacob-hugging-face/job-descriptions"
     limit = min(settings.hf_job_limit, 50)
-    records, _, _ = load_and_filter_hf_jobs(
+    records, _, _ = await load_and_filter_hf_jobs_async(
         dataset_id=dataset_id,
         limit=limit,
         keyword_filter=keywords,

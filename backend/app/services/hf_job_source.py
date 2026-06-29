@@ -5,7 +5,9 @@ Loads job postings from HuggingFace datasets and normalizes them
 to match the platform's Job schema via source adapters (etl/source_adapters.py).
 """
 
+import asyncio
 from datasets import load_dataset
+from functools import partial
 from typing import List, Optional, Dict, Any
 import logging
 
@@ -143,6 +145,28 @@ def fetch_hf_jobs_multi(
                 all_jobs.append(j)
 
     return all_jobs, total_processed
+
+
+async def fetch_hf_jobs_async(
+    dataset_id: str = "jacob-hugging-face/job-descriptions",
+    split: str = "train",
+    limit: int = 50,
+    keyword_filter: Optional[List[str]] = None,
+) -> tuple[List[dict], int]:
+    """Async wrapper around fetch_hf_jobs — runs in thread pool to avoid blocking the event loop.
+
+    HuggingFace datasets uses sync HTTP calls (requests/urllib3) that can hang for 60+ seconds
+    on gateway timeouts. Running in a thread prevents starving asyncpg and other concurrent requests.
+    """
+    return await asyncio.to_thread(
+        partial(
+            fetch_hf_jobs,
+            dataset_id=dataset_id,
+            split=split,
+            limit=limit,
+            keyword_filter=keyword_filter,
+        )
+    )
 
 
 def get_available_datasets() -> List[Dict[str, Any]]:

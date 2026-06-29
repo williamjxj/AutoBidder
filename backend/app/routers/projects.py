@@ -31,7 +31,7 @@ from ..models.project import (
     ProjectDiscoverResponse,
     ProjectListResponse
 )
-from ..services.hf_job_source import fetch_hf_jobs, get_available_datasets
+from ..services.hf_job_source import fetch_hf_jobs_async, get_available_datasets
 from ..services.project_service import (
     list_projects as list_projects_svc,
     get_stats,
@@ -120,9 +120,9 @@ async def discover_projects(
         # HF dataset: load via hf_loader, upsert, return from DB
         if USE_HF_DATASET and dataset_id:
             try:
-                from app.etl.hf_loader import load_and_filter_hf_jobs
+                from app.etl.hf_loader import load_and_filter_hf_jobs_async
 
-                records, _, _ = load_and_filter_hf_jobs(
+                records, _, _ = await load_and_filter_hf_jobs_async(
                     dataset_id=dataset_id,
                     limit=min(request.max_results, settings.hf_job_limit),
                     keyword_filter=keywords,
@@ -189,7 +189,7 @@ async def discover_projects(
                     jobs=[],
                     keywords_searched=keywords,
                 )
-            jobs, _ = fetch_hf_jobs(
+            jobs, _ = await fetch_hf_jobs_async(
                 dataset_id=target_dataset,
                 limit=min(request.max_results, settings.hf_job_limit),
                 keyword_filter=keywords
@@ -375,7 +375,7 @@ async def list_projects(
 
             # For HF dataset, fetch from HuggingFace then merge with DB
             fetch_limit = max(limit * 2, 200)
-            jobs, _ = fetch_hf_jobs(
+            jobs, _ = await fetch_hf_jobs_async(
                 dataset_id=target_dataset or settings.hf_dataset_ids_list[0],
                 limit=fetch_limit,
                 keyword_filter=keywords
@@ -484,7 +484,7 @@ async def chat_with_projects(
 
     # In HF mode, we'll fetch some sample jobs for context
     if USE_HF_DATASET:
-        jobs, _ = fetch_hf_jobs(
+        jobs, _ = await fetch_hf_jobs_async(
             dataset_id=settings.hf_dataset_ids_list[0] if settings.hf_dataset_ids_list else "jacob-hugging-face/job-descriptions",
             limit=10
         )
@@ -615,7 +615,7 @@ async def get_project_stats(
                 stats["filter_keywords"] = ", ".join(filter_keywords) if filter_keywords else "—"
                 stats["data_source"] = "Database"
                 return stats
-            jobs, total_scanned = fetch_hf_jobs(
+            jobs, total_scanned = await fetch_hf_jobs_async(
                 dataset_id=target_dataset,
                 limit=settings.hf_job_limit,
                 keyword_filter=filter_keywords if filter_keywords else None,
