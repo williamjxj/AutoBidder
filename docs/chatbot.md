@@ -624,7 +624,7 @@ logger.info(
 - [Knowledge Base System](./knowledge-base.md) - Document upload and ChromaDB integration
 - [AI Proposal Generation](./proposals.md) - How RAG is used for proposals
 - [User Profile System](./user-guides.md) - User metadata and preferences
-- [ETL Scheduler](./etl-scheduler-guide.md) - Project discovery pipeline
+- [ETL Scheduler](./huggingface-job-discovery.md#etl-scheduler-guide) - Project discovery pipeline
 
 ---
 

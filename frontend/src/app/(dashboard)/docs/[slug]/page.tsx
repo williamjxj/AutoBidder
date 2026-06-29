@@ -21,7 +21,7 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
   'setup-and-run': {
     title: 'Setup & Run Guide',
     description: '10-minute infrastructure and application setup',
-    githubPath: 'docs/setup-and-run.md',
+    githubPath: 'docs/setup.md',
   },
   'user-guides': {
     title: 'User Manual',
@@ -51,22 +51,22 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
   'keywords': {
     title: 'Keywords',
     description: 'Keyword management for project matching and AI generation',
-    githubPath: 'docs/keywords.md',
+    githubPath: 'docs/configuration.md',
   },
   'strategies': {
     title: 'Strategies',
     description: 'Proposal strategy templates and default behavior',
-    githubPath: 'docs/strategies.md',
+    githubPath: 'docs/configuration.md',
   },
   'settings': {
     title: 'Settings',
     description: 'Preferences and platform credential management',
-    githubPath: 'docs/settings.md',
+    githubPath: 'docs/configuration.md',
   },
   'huggingface-job-discovery': {
     title: 'Job Discovery',
     description: 'HuggingFace dataset integration',
-    githubPath: 'docs/huggingface-job-discovery.md',
+    githubPath: 'docs/projects.md',
   },
   'ai-proposal-generation-concepts': {
     title: 'AI Proposal Concepts',
@@ -81,7 +81,7 @@ const DOCS_MAP: Record<string, { title: string; description: string; githubPath:
   'chromadb': {
     title: 'ChromaDB',
     description: 'Vector DB setup, modes, and troubleshooting',
-    githubPath: 'docs/chromadb.md',
+    githubPath: 'docs/setup.md',
   },
   'autonomous-automation-strategy': {
     title: 'Autonomous Features',
@@ -198,7 +198,7 @@ export default function DocPage({ params }: PageProps) {
                     {slug === 'user-guides' && (
                       <>
                         <DocLink title="Proposals" href="/docs/proposals" />
-                        <DocLink title="Job Discovery" href="/docs/huggingface-job-discovery" />
+                        <DocLink title="Projects" href="/docs/projects" />
                       </>
                     )}
                     {slug === 'proposals' && (
@@ -211,7 +211,7 @@ export default function DocPage({ params }: PageProps) {
                     {slug === 'projects' && (
                       <>
                         <DocLink title="Proposals" href="/docs/proposals" />
-                        <DocLink title="Job Discovery" href="/docs/huggingface-job-discovery" />
+                        <DocLink title="Projects" href="/docs/projects" />
                       </>
                     )}
                     {slug === 'ai-proposal-generation-concepts' && (

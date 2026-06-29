@@ -118,5 +118,5 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 
 1. 📚 Read [architecture-diagram.md](./architecture-diagram.md)
 2. 🔐 Review [setup-auth.md](../setup-auth.md)
-3. 📋 Check [implementation-progress.md](../implementation-progress.md)
+3. 📋 Check [projects.md](../projects.md) for project discovery details
 4. 📊 Explore [API Contracts](../../specs/001-auto-bidder-improvements/contracts/)

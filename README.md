@@ -112,23 +112,23 @@ uvicorn app.main:app --reload --port 5555
 
 > 💡 **Makefile:** Run `make help` for all available commands, or see [docs/makefile-commands.md](docs/makefile-commands.md).
 
-📄 [Complete setup guide](./docs/setup-and-run.md) | [Auth setup](./docs/setup-auth.md) | [Email config](./docs/email-system.md)
+📄 [Setup guide](./docs/setup.md) | [Email config](./docs/email-system.md)
 
 ## 🔐 Security
 
 **JWT Authentication** with bcrypt password hashing, 30-day token expiration, and secure secrets.
 
-📄 [Auth setup guide](./docs/setup-auth.md) | [Auth flow diagram](./docs/diagrams/auth-flow-diagram.md)
+📄 [Setup guide](./docs/setup.md) | [Auth flow diagram](./docs/diagrams/auth-flow-diagram.md)
 
 ## 📚 Documentation
 
 | Guide | Description |
 |-------|-------------|
-| [Setup & Run](./docs/setup-and-run.md) | 10-minute quickstart |
+| [Setup](./docs/setup.md) | Quick start, auth, ChromaDB & Railway deployment |
 | [User Guide](./docs/user-guides.md) | How to use the platform |
 | [Proposals](./docs/proposals.md) | Proposal workflow & AI generation |
 | [Email System](./docs/email-system.md) | Email config & troubleshooting |
-| [Auth Setup](./docs/setup-auth.md) | JWT authentication |
+| [Configuration](./docs/configuration.md) | Keywords, strategies & settings |
 | [Architecture](./docs/diagrams/) | System diagrams |
 
 📄 [Full documentation index](./docs/README.md)
@@ -137,7 +137,7 @@ uvicorn app.main:app --reload --port 5555
 
 **Frontend:** Vercel • **Backend:** Railway/Fly.io • **Database:** PostgreSQL
 
-📄 [Railway deployment guide](./docs/railway-deployment-guide.md)
+📄 [Deployment guide](./docs/setup.md#railway-deployment)
 
 ## 📄 License
 
