@@ -234,6 +234,225 @@ Recommended architecture: unified ETL into one `projects` table.
 - Use active keywords to improve default list relevance when search box is empty.
 - Use source badges to understand where each card came from.
 
+---
+
+## Multi-Source Architecture
+
+The platform uses a **Source Adapter Registry** pattern — each data source (HF dataset, Freelancer, manual upload) has one adapter class that maps its raw schema to a canonical `JobRecord`:
+
+| Source | Adapter | Status |
+|--------|---------|--------|
+| `jacob-hugging-face/job-descriptions` | `JacobHFAdapter` | ✅ Production |
+| `lukebarousse/data_jobs` | `LukeBarousseAdapter` | ✅ Production |
+| `datastax/linkedin_job_listings` | `DatastaxLinkedInAdapter` | ✅ Production |
+| Freelancer (scraped JSON) | `FreelancerAdapter` | ✅ Production |
+| Manual upload (JSON/CSV) | `ManualUploadAdapter` | ✅ Production |
+
+**Env config** — `HF_DATASET_IDS` (comma-separated) takes priority over `HF_DATASET_ID`. Resolution: `HF_DATASET_IDS` → `HF_DATASET_ID` → hardcoded default.
+
+**Adding a new source** = one adapter class + one registry line. See `backend/app/etl/source_adapters.py`.
+
+---
+
+## Future: Web Scraping (Optional)
+
+Real web scraping (Upwork, Freelancer, etc.) is **planned but not yet implemented**. The platform uses HuggingFace datasets for job discovery.
+
+| Approach | Status |
+|----------|--------|
+| **HuggingFace datasets** | ✅ Implemented |
+| **Web scraping** | ❌ Not implemented |
+
+**What exists (preparation only):**
+- DB schema: `scraping_jobs`, `platform_credentials` in migrations
+- Error class: `ScrapingError` in `backend/app/core/errors.py`
+- Dependencies: playwright, beautifulsoup4, lxml in requirements.txt
+
+**What's missing:**
+- No `scraper_service.py`, no scraping API routes
+- No Upwork/Freelancer scrapers, no background workers
+
+**Recommendation:** Continue using HuggingFace. Add scraping only if production requires live platform job feeds.
+
+---
+
+---
+
+## HuggingFace Dataset Integration
+
+**Purpose:** Replace Crawlee web scraping with HuggingFace datasets for faster development  
+**Status:** ✅ COMPLETE - Production Ready
+
+### Why This Approach
+
+The scraping layer (Crawlee) feeds job postings into the backend's job discovery pipeline. HuggingFace datasets serve as a **static seed/mock data source** that emits the same job-shaped records, so the rest of the pipeline (RAG, proposal generation, analytics) runs **unchanged**.
+
+**Benefits:**
+- ✅ **No scraping complexity** - No proxies, anti-bot detection, rate limits
+- ✅ **Instant data access** - 30K+ jobs available immediately
+- ✅ **Same API interface** - Drop-in replacement for Crawlee
+- ✅ **Real job data** - Actual job postings from Google, LinkedIn, etc.
+- ✅ **Reproducible** - Same dataset for all developers
+- ✅ **Cost-free** - No API fees or infrastructure costs
+
+**Time Saved:** 2-3 weeks of scraper development
+
+### Feature Flag Pattern
+
+```python
+USE_HF_DATASET = os.getenv("USE_HF_DATASET", "true").lower() == "true"
+
+if USE_HF_DATASET:
+    jobs = await fetch_hf_jobs(keywords)  # HuggingFace
+else:
+    jobs = await scrape_jobs(keywords)    # Web scraping (future)
+```
+
+### Available Datasets
+
+| Dataset | Size | Fields | Recommended |
+|---------|------|--------|:-----------:|
+| `jacob-hugging-face/job-descriptions` | 5,000+ | Title, Company, Description, Skills | ⭐ Yes |
+| `lukebarousse/data_jobs` | 30,000+ | Title, Company, Salary, Skills | For analytics |
+| `debasmitamukherjee/IT_job_postings` | 10,000+ | Description, Skills | For IT roles |
+| `nakamoto-yama/linkedin_job_postings` | Varies | Company info, job details | For LinkedIn data |
+
+### Configuration
+
+```bash
+# HuggingFace Dataset Configuration
+USE_HF_DATASET=true
+HF_DATASET_ID=jacob-hugging-face/job-descriptions
+HF_DATASET_IDS=jacob-hugging-face/job-descriptions,lukebarousse/data_jobs,datastax/linkedin_job_listings
+HF_JOB_LIMIT=200
+```
+
+`HF_DATASET_IDS` (comma-separated) takes priority over `HF_DATASET_ID`. Resolution: `HF_DATASET_IDS` → `HF_DATASET_ID` → hardcoded default.
+
+### ETL Scheduler Guide
+
+Two ways to run ETL ingestion: **from the UI** or **from CLI scripts**.
+
+#### 1. From the UI (Backend Running)
+
+When the backend is running with `ETL_USE_PERSISTENCE=true`:
+
+**Automatic scheduled runs:**
+- **HF datasets**: Runs every `HF_ETL_SCHEDULE_HOURS` (default 168 = weekly)
+- **Freelancer**: Runs every `FREELANCER_ETL_SCHEDULE_HOURS` (default 24 = daily)
+
+The scheduler starts automatically on backend startup. No extra setup.
+
+**Manual trigger:**
+```bash
+curl -X POST http://localhost:5555/api/etl/trigger \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source": "hf_loader"}'
+# or
+  -d '{"source": "freelancer_loader"}'
+```
+
+Returns `202 Accepted`; ingestion runs in the background.
+
+**View run history:**
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:5555/api/etl/runs?limit=20"
+```
+
+#### 2. From CLI Scripts (Cron / Airflow)
+
+**HuggingFace ETL:**
+```bash
+cd backend && uv run python scripts/hf_etl.py --dataset-id jacob-hugging-face/job-descriptions --limit 200
+cd backend && uv run python scripts/hf_etl.py --keywords "python,fastapi" --limit 50
+cd backend && uv run python scripts/hf_etl.py --output data/scraped/hf_$(date +%Y%m%d).json --no-db
+```
+
+**Freelancer ETL:**
+```bash
+cd backend && uv run python scripts/freelancer_etl.py --keywords "python,fastapi" --limit 20
+cd backend && uv run python scripts/freelancer_etl.py --load-from ../data/scraped/freelancer_20260305_151834.json
+cd backend && uv run python scripts/freelancer_etl.py --scrape-only --keywords "python" --limit 10
+```
+
+**Cron entries:**
+```cron
+# HF weekly (Sunday 2am)
+0 2 * * 0 cd /path/to/auto-bidder/backend && uv run python scripts/hf_etl.py >> /var/log/hf_etl.log 2>&1
+
+# Freelancer daily (3am)
+0 3 * * * cd /path/to/auto-bidder/backend && uv run python scripts/freelancer_etl.py --keywords "python,fastapi,react" >> /var/log/freelancer_etl.log 2>&1
+```
+
+#### Environment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ETL_USE_PERSISTENCE` | false | Enable scheduler + DB reads in backend |
+| `HF_ETL_SCHEDULE_HOURS` | 168 | HF ingestion interval (hours) |
+| `FREELANCER_ETL_SCHEDULE_HOURS` | 24 | Freelancer ingestion interval (hours) |
+
+### Architecture & Data Flow
+
+```
+User Action (Click "Discover Jobs")
+    ↓
+Frontend: API Client → POST /api/projects/discover
+    ↓
+Backend: HF Service → HuggingFace Datasets API (streaming)
+    ↓
+Normalize & Filter → Return to Frontend (JSON)
+    ↓
+Display in UI (ProjectCard components)
+```
+
+### API Endpoints
+
+**Discover Jobs:**
+```bash
+POST /api/projects/discover
+Authorization: Bearer <token>
+{
+  "keywords": ["python", "fastapi", "react"],
+  "max_results": 50,
+  "dataset_id": "jacob-hugging-face/job-descriptions"
+}
+```
+
+**Get Statistics:**
+```bash
+GET /api/projects/stats
+Authorization: Bearer <token>
+```
+
+**Available Datasets:**
+```bash
+GET /api/projects/datasets
+Authorization: Bearer <token>
+```
+
+### Core Service: hf_job_source.py
+
+The service handles multiple dataset formats with intelligent field mapping:
+
+- `normalize_hf_job(record, dataset_id)` — Maps raw HF dataset row → internal Job dict
+- `fetch_hf_jobs(dataset_id, split, limit, keyword_filter)` — Loads jobs from HF dataset
+- `search_hf_jobs(keywords, limit)` — Searches for jobs matching keywords
+
+**Streaming Mode:** For large datasets (30K+), uses `load_dataset(..., streaming=True)` to avoid memory issues.
+
+### Migration Path
+
+| Phase | Config | Purpose |
+|-------|--------|---------|
+| **Phase 0 (Current)** | `USE_HF_DATASET=true` | Develop with mock data |
+| **Phase 1 (Future)** | `USE_HF_DATASET=false` | Add real web scraping |
+| **Production** | `USE_HF_DATASET=false`, `HF_FALLBACK=true` | Hybrid approach |
+
+---
+
 ## FAQ
 
 ### Is "general loading" the same as "Discover"?
